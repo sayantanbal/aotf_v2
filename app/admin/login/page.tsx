@@ -17,17 +17,71 @@ function AdminLoginContent() {
       return;
     }
 
-    if (user?.publicMetadata?.isAdmin === true) {
-      router.replace("/admin/tuitions");
-      return;
-    }
+    let cancelled = false;
 
-    setIsSwitchingAccount(true);
+    const redirectWithError = async (
+      error: "deactivated" | "locked" | "forbidden",
+    ) => {
+      if (cancelled) return;
 
-    void signOut({ redirectUrl: "/admin/login" }).catch((signOutError) => {
-      console.error("[admin-login] Failed to sign out current user:", signOutError);
-      setIsSwitchingAccount(false);
-    });
+      setIsSwitchingAccount(true);
+
+      try {
+        await signOut({ redirectUrl: `/admin/login?error=${error}` });
+      } catch (signOutError) {
+        console.error(
+          "[admin-login] Failed to sign out current user:",
+          signOutError,
+        );
+      }
+
+      if (!cancelled) {
+        router.replace(`/admin/login?error=${error}`);
+      }
+    };
+
+    const ensureAdminAccess = async () => {
+      if (!user?.publicMetadata || user.publicMetadata.isAdmin !== true) {
+        await redirectWithError("forbidden");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/v1/admin/admins", { cache: "no-store" });
+        if (res.ok) {
+          if (!cancelled) {
+            router.replace("/admin/tuitions");
+          }
+          return;
+        }
+
+        const payload = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        const message = payload.error?.toLowerCase() ?? "";
+
+        if (message.includes("deactivated")) {
+          await redirectWithError("deactivated");
+          return;
+        }
+
+        if (message.includes("locked")) {
+          await redirectWithError("locked");
+          return;
+        }
+
+        await redirectWithError("forbidden");
+      } catch (error) {
+        console.error("[admin-login] Failed to verify admin status:", error);
+        await redirectWithError("forbidden");
+      }
+    };
+
+    void ensureAdminAccess();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isLoaded, isSignedIn, router, signOut, user]);
 
   if (!isLoaded || isSwitchingAccount) {
@@ -56,8 +110,8 @@ function AdminLoginContent() {
             {error === "locked" && (
               <>
                 Your account has been locked due to multiple failed login
-                attempts or administrative action. Please contact the
-                superadmin to unlock your account.
+                attempts or administrative action. Please contact the superadmin
+                to unlock your account.
               </>
             )}
             {error === "deactivated" && (
@@ -77,9 +131,7 @@ function AdminLoginContent() {
 
       <div className="mb-4 text-center">
         <h1 className="mb-2 text-3xl font-bold">Admin Login</h1>
-        <p className="text-gray-600">
-          Sign in to access the admin panel
-        </p>
+        <p className="text-gray-600">Sign in to access the admin panel</p>
       </div>
 
       <SignIn
@@ -107,9 +159,14 @@ function AdminLoginContent() {
 
 export default function AdminSignInPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center">Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[60vh] items-center justify-center">
+          Loading...
+        </div>
+      }
+    >
       <AdminLoginContent />
     </Suspense>
   );
 }
-
