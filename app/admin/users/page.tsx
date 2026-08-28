@@ -83,7 +83,6 @@ type ApiUser = {
   status: "active" | "blocked" | "deleted";
   onboardingCompleted: boolean;
   avatarUrl: string | null;
-  lastLogin?: string | null;
   profileUrl: string;
   verifyUrl: string;
   location: string | null;

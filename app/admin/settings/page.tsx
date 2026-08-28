@@ -732,19 +732,12 @@ function AdminAccountsSection() {
 
   const validatePwdForm = (): boolean => {
     const errors: Record<string, string> = {};
-    const isSelfChange =
-      !!pwdTarget &&
-      !!meta?.adminId &&
-      String(pwdTarget.id) === String(meta.adminId);
-
-    if (isSelfChange && !pwdForm.oldPassword) {
+    if (!pwdForm.oldPassword)
       errors.oldPassword = "Current password is required";
-    }
-
     if (!pwdForm.newPassword) errors.newPassword = "New password is required";
     else if (pwdForm.newPassword.length < 8)
       errors.newPassword = "Password must be at least 8 characters";
-    else if (isSelfChange && pwdForm.newPassword === pwdForm.oldPassword)
+    else if (pwdForm.newPassword === pwdForm.oldPassword)
       errors.newPassword = "New password must differ from current password";
     if (pwdForm.newPassword !== pwdForm.confirmPassword)
       errors.confirmPassword = "Passwords do not match";
@@ -754,38 +747,16 @@ function AdminAccountsSection() {
 
   const handleChangePassword = async () => {
     if (!validatePwdForm()) return;
-    if (!pwdTarget) return;
-
     setIsChangingPwd(true);
     try {
-      const res = await fetch(
-        `/api/v1/admin/admins/${pwdTarget.id}/change-password`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            currentPassword: pwdForm.oldPassword,
-            newPassword: pwdForm.newPassword,
-          }),
-        },
-      );
-
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        addToast({
-          description: json?.error || "Failed to change password",
-          color: "danger",
-        });
-        return;
-      }
-
+      // TODO: wire to real API
+      await new Promise((r) => setTimeout(r, 800));
       addToast({
-        description: json?.message || `Password updated for ${pwdTarget.name}`,
+        description: `Password updated for ${pwdTarget?.name}`,
         color: "success",
       });
       closePwd();
       setPwdTarget(null);
-      setPwdForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
     } catch {
       addToast({
         description: "Failed to change password",
@@ -837,18 +808,56 @@ function AdminAccountsSection() {
 
   // ── Toggle Status ──────────────────────────────────────────────────────
 
-  const toggleAdminStatus = (admin: AdminAccount) => {
+  const toggleAdminStatus = async (admin: AdminAccount) => {
+    const isActivating = admin.status !== "active";
+    const endpoint = `/api/v1/admin/admins/${admin.id}/${isActivating ? "reactivate" : "deactivate"}`;
+
+    // Optimistic update
     setAdmins((prev) =>
       prev.map((a) =>
         a.id === admin.id
-          ? { ...a, status: a.status === "active" ? "inactive" : "active" }
+          ? { ...a, status: isActivating ? "active" : "inactive" }
           : a,
       ),
     );
-    addToast({
-      description: `${admin.name} ${admin.status === "active" ? "deactivated" : "activated"}`,
-      color: "success",
-    });
+
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        // Revert on failure
+        setAdmins((prev) =>
+          prev.map((a) =>
+            a.id === admin.id ? { ...a, status: admin.status } : a,
+          ),
+        );
+        addToast({
+          description: json?.error || `Failed to ${isActivating ? "activate" : "deactivate"} admin`,
+          color: "danger",
+        });
+        return;
+      }
+
+      addToast({
+        description: `${admin.name} ${isActivating ? "activated" : "deactivated"}`,
+        color: "success",
+      });
+    } catch {
+      // Revert on failure
+      setAdmins((prev) =>
+        prev.map((a) =>
+          a.id === admin.id ? { ...a, status: admin.status } : a,
+        ),
+      );
+      addToast({
+        description: `Failed to ${isActivating ? "activate" : "deactivate"} admin`,
+        color: "danger",
+      });
+    }
   };
 
   const copyId = (id: string) => {

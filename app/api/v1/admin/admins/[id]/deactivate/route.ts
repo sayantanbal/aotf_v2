@@ -20,18 +20,12 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const metadata = sessionClaims?.publicMetadata as Record<string, unknown>;
-
-    if (metadata?.isAdmin !== true) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     await dbConnect();
 
     const currentAdmin = await Admin.findOne({ clerkId: userId });
 
-    if (!currentAdmin) {
-      return NextResponse.json({ error: "Admin not found" }, { status: 404 });
+    if (!currentAdmin || !currentAdmin.isActive) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Check permissions

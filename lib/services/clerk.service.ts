@@ -242,26 +242,6 @@ export async function updateAdminUser(
 }
 
 /**
- * Set a new password for an admin in Clerk
- */
-export async function setAdminPassword(clerkId: string, password: string) {
-  try {
-    const client = await clerkClient();
-    await client.users.updateUser(clerkId, {
-      password,
-      skipPasswordChecks: false,
-    });
-    return { success: true };
-  } catch (error) {
-    console.error("[clerk-service] Error setting admin password:", error);
-    return {
-      success: false,
-      error: "Failed to update admin password",
-    };
-  }
-}
-
-/**
  * Lock/unlock admin account
  */
 export async function setAdminLockStatus(clerkId: string, isLocked: boolean) {
