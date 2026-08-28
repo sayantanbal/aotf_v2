@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Underline from "./ui/Underline";
 
+type TestimonialsProps = {
+  title: string;
+  variant?: "student" | "teacher";
+  teacherReviews?: TeacherCard[];
+};
+
 type ReviewCard = {
   id: string;
   image: string;
@@ -10,13 +16,28 @@ type ReviewCard = {
   handle: string;
   message: string;
   rating: number;
-  _uid?: string; // 👈 add this
+  _uid?: string;
 };
 
-const Testimonials = () => {
+type TeacherCard = {
+  id: string;
+  name: string;
+  qualification: string;
+  experience: number;
+  message: string;
+  _uid?: string;
+};
+
+const Testimonials = ({
+  title,
+  variant = "student",
+  teacherReviews = [],
+}: TestimonialsProps) => {
   const [cardsData, setCardsData] = useState<ReviewCard[]>([]);
 
   useEffect(() => {
+    if (variant !== "student") return;
+
     let cancelled = false;
 
     (async () => {
@@ -24,77 +45,79 @@ const Testimonials = () => {
         const res = await fetch("/api/v1/reviews?public=1&limit=20", {
           cache: "no-store",
         });
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          reviews?: Array<{
-            id: string;
-            rating: number;
-            title: string | null;
-            message: string;
-            createdAt: string;
-            user: { username: string; name: string; imageUrl: string | null };
-          }>;
-        };
 
-        const mapped: ReviewCard[] = (data.reviews ?? []).map((r) => ({
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        const mapped: ReviewCard[] = (data.reviews ?? []).map((r: any) => ({
           id: r.id,
-          image:
-            r.user.imageUrl ||
-            "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200",
+          image: r.user.imageUrl || `https://api.dicebear.com/5.x/initials/svg?seed=${r.user.name}`,
           name: r.user.name,
           handle: `@${r.user.username}`,
           message: r.message,
           rating: r.rating,
         }));
 
-        if (!cancelled && mapped.length > 0) setCardsData(mapped);
-      } catch {
-        // keep fallback
-      }
+        if (!cancelled) setCardsData(mapped);
+      } catch {}
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [variant]);
 
-  const doubled = useMemo(
-    () =>
-      cardsData.flatMap((card, i) => [
-        { ...card, _uid: `${card.id}-a-${i}` },
-        { ...card, _uid: `${card.id}-b-${i}` },
-      ]),
-    [cardsData]
-  );
+  const displayData = useMemo(() => {
+    const source = variant === "student" ? cardsData : teacherReviews;
 
-  const CreateCard = ({ card }: { card: ReviewCard }) => (
-    <div className="p-4 rounded-lg mx-4 shadow hover:shadow-lg transition-all duration-200 w-72 shrink-0">
-      <div className="flex gap-2">
-        <img className="size-11 rounded-full" src={card.image} alt="User" />
-        <div className="flex flex-col">
-          <div className="flex items-center gap-1">
-            <p>{card.name}</p>
-            <svg
-              className="mt-0.5 fill-blue-500"
-              width="12"
-              height="12"
-              viewBox="0 0 12 12"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M4.555.72a4 4 0 0 1-.297.24c-.179.12-.38.202-.59.244a4 4 0 0 1-.38.041c-.48.039-.721.058-.922.129a1.63 1.63 0 0 0-.992.992c-.071.2-.09.441-.129.922a4 4 0 0 1-.041.38 1.6 1.6 0 0 1-.245.59 3 3 0 0 1-.239.297c-.313.368-.47.551-.56.743-.213.444-.213.96 0 1.404.09.192.247.375.56.743.125.146.187.219.24.297.12.179.202.38.244.59.018.093.026.189.041.38.039.48.058.721.129.922.163.464.528.829.992.992.2.071.441.09.922.129.191.015.287.023.38.041.21.042.411.125.59.245.078.052.151.114.297.239.368.313.551.47.743.56.444.213.96.213 1.404 0 .192-.09.375-.247.743-.56.146-.125.219-.187.297-.24.179-.12.38-.202.59-.244a4 4 0 0 1 .38-.041c.48-.039.721-.058.922-.129.464-.163.829-.528.992-.992.071-.2.09-.441.129-.922a4 4 0 0 1 .041-.38c.042-.21.125-.411.245-.59.052-.078.114-.151.239-.297.313-.368.47-.551.56-.743.213-.444.213-.96 0-1.404-.09-.192-.247-.375-.56-.743a4 4 0 0 1-.24-.297 1.6 1.6 0 0 1-.244-.59 3 3 0 0 1-.041-.38c-.039-.48-.058-.721-.129-.922a1.63 1.63 0 0 0-.992-.992c-.2-.071-.441-.09-.922-.129a4 4 0 0 1-.38-.041 1.6 1.6 0 0 1-.59-.245A3 3 0 0 1 7.445.72C7.077.407 6.894.25 6.702.16a1.63 1.63 0 0 0-1.404 0c-.192.09-.375.247-.743.56m4.07 3.998a.488.488 0 0 0-.691-.69l-2.91 2.91-.958-.957a.488.488 0 0 0-.69.69l1.302 1.302c.19.191.5.191.69 0z"
-              />
-            </svg>
-          </div>
-          <span className="text-xs text-slate-500">{card.handle}</span>
+    return source.flatMap((card: any, i: number) => [
+      { ...card, _uid: `${card.id}-a-${i}` },
+      { ...card, _uid: `${card.id}-b-${i}` },
+    ]);
+  }, [cardsData, teacherReviews, variant]);
+
+  const StudentCard = ({ card }: { card: ReviewCard }) => (
+    <div className="w-72 shrink-0 rounded-xl bg-white p-4 shadow transition hover:shadow-lg">
+      <div className="flex gap-3">
+        <img src={card.image} className="h-11 w-11 rounded-full object-cover" />
+
+        <div>
+          <h3 className="font-semibold">{card.name}</h3>
+
+          <p className="text-xs text-gray-500">{card.handle}</p>
         </div>
       </div>
-      <p className="text-sm py-4 text-gray-800 line-clamp-4">{card.message}</p>
+
+      <p className="mt-4 line-clamp-4 text-sm text-gray-700">{card.message}</p>
+
+      <div className="mt-3 flex">
+        {Array.from({ length: card.rating }).map((_, i) => (
+          <span key={i}>⭐</span>
+        ))}
+      </div>
     </div>
   );
 
+  const TeacherReviewCard = ({ card }: { card: TeacherCard }) => (
+    <div className="w-80 shrink-0 rounded-2xl border border-green-100 bg-linear-to-br from-green-50 to-white p-5 shadow-md transition hover:-translate-y-1 hover:shadow-xl">
+      <div className="flex items-center gap-4">
+        <div>
+          <h3 className="text-lg font-bold">{card.name}</h3>
+          <p className="text-sm font-medium text-green-600">
+            {card.qualification}
+          </p>
+          <span className="inline-block mt-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+            {card.experience} Years Experience
+          </span>
+        </div>
+      </div>
+
+      <p className="mt-5 text-sm leading-6 text-gray-700 line-clamp-5">
+        "{card.message}"
+      </p>
+    </div>
+  );
   return (
     <>
       <style>{`
@@ -113,7 +136,7 @@ const Testimonials = () => {
         `}</style>
       <div className="my-5 md:my-10 w-full">
         <Underline
-          title="Reviews"
+          title={title}
           className="text-center"
           color="green"
           size="large"
@@ -121,20 +144,28 @@ const Testimonials = () => {
         <div className="w-full">
           <div className="marquee-row w-full mx-auto max-w-5xl overflow-hidden relative">
             <div className="absolute left-0 top-0 h-full w-20 z-10 pointer-events-none bg-linear-to-r from-white dark:from-black to-transparent"></div>
-            <div className="marquee-inner flex transform-gpu py-5">
-              {doubled.map((card) => (
-                <CreateCard key={`row1-${card._uid}`} card={card} />
-              ))}
+            <div className="marquee-inner flex transform-gpu py-5 gap-10">
+              {displayData.map((card: any) =>
+                variant === "student" ? (
+                  <StudentCard key={`row1-${card._uid}`} card={card} />
+                ) : (
+                  <TeacherReviewCard key={`row1-${card._uid}`} card={card} />
+                ),
+              )}
             </div>
             <div className="absolute right-0 top-0 h-full w-20 z-10 pointer-events-none bg-linear-to-l from-white dark:from-black to-transparent"></div>
           </div>
 
           <div className="marquee-row w-full mx-auto max-w-5xl overflow-hidden relative">
             <div className="absolute left-0 top-0 h-full w-20 z-10 pointer-events-none bg-linear-to-r from-white dark:from-black to-transparent"></div>
-            <div className="marquee-inner marquee-reverse flex transform-gpu py-5">
-              {doubled.map((card) => (
-                <CreateCard key={`row2-${card._uid}`} card={card} />
-              ))}
+            <div className="marquee-inner marquee-reverse flex transform-gpu py-5 gap-10">
+              {displayData.map((card: any) =>
+                variant === "student" ? (
+                  <StudentCard key={`row1-${card._uid}`} card={card} />
+                ) : (
+                  <TeacherReviewCard key={`row1-${card._uid}`} card={card} />
+                ),
+              )}
             </div>
             <div className="absolute right-0 top-0 h-full w-20 z-10 pointer-events-none bg-linear-to-l from-white dark:from-black to-transparent"></div>
           </div>

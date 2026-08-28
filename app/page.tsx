@@ -12,6 +12,25 @@ import AdPlacementSlot from "@/components/AdPlacementSlot";
 import CitySelector from "@/components/CitySelector";
 
 export default function Home() {
+  const teacherReviews = [
+    {
+      id: "1",
+      name: "Rahul Sharma",
+      qualification: "M.Sc. Mathematics",
+      experience: 12,
+      message:
+        "Teaching is about inspiring students to think independently and solve real-world problems.",
+    },
+    {
+      id: "2",
+      name: "Priya Das",
+      qualification: "M.A. English",
+      experience: 8,
+      message:
+        "I focus on building confidence and communication skills through practical learning.",
+    },
+  ];
+
   return (
     <>
       <section className="flex w-full flex-col items-center justify-center">
@@ -57,6 +76,11 @@ export default function Home() {
         <AdPlacementSlot placement="home_banner" />
         <ReknownedSection />
         <TimelineDemo />
+        <Testimonials
+          title="Meet Our Teachers"
+          variant="teacher"
+          teacherReviews={teacherReviews}
+        />
         <CitySelector />
         <Card
           isBlurred
@@ -76,7 +100,10 @@ export default function Home() {
             quote="Execution is key to success."
           />
         </Card>
-        <Testimonials />
+        <Testimonials
+          title="Reviews"
+          variant="student"
+        />
         {/* <Stats /> */}
         {/* <ScrollBanner /> */}
         <AdPlacementSlot placement="footer" />
