@@ -357,6 +357,7 @@ async function createClerkUser(params: {
       lastName,
       skipPasswordRequirement: false,
       skipPasswordChecks: false,
+      legal_accepted_at: new Date().toISOString(),
       publicMetadata: buildPublicMetadata(params.role),
     });
   } catch (error: unknown) {
@@ -382,6 +383,7 @@ async function updateClerkUser(params: {
   await client.users.updateUser(params.clerkId, {
     username: params.username,
     password: params.password,
+    legal_accepted_at: new Date().toISOString(),
     firstName: firstName || params.username,
     lastName,
     skipPasswordChecks: false,
