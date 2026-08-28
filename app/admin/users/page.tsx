@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Tabs, Tab } from "@heroui/tabs";
 import { Card, CardBody, CardHeader, CardFooter } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -41,6 +47,7 @@ type UserData = {
   statusValue: "active" | "blocked" | "deleted";
   onboardingCompleted: boolean;
   avatarUrl?: string | null;
+  lastLogin?: string | null;
   profileUrl: string;
   verifyUrl: string;
   location?: string | null;
@@ -76,6 +83,7 @@ type ApiUser = {
   status: "active" | "blocked" | "deleted";
   onboardingCompleted: boolean;
   avatarUrl: string | null;
+  lastLogin?: string | null;
   profileUrl: string;
   verifyUrl: string;
   location: string | null;
@@ -134,6 +142,7 @@ function mapUser(user: ApiUser): UserData {
     status: user.status === "active" ? "active" : "inactive",
     onboardingCompleted: user.onboardingCompleted,
     avatarUrl: user.avatarUrl,
+    lastLogin: user.lastLogin,
     profileUrl: user.profileUrl,
     verifyUrl: user.verifyUrl,
     location: user.location,
@@ -151,12 +160,7 @@ function getInitials(name: string) {
     .join("");
 }
 
-function cacheKey(
-  role: Role,
-  page: number,
-  status: Status,
-  search: string,
-) {
+function cacheKey(role: Role, page: number, status: Status, search: string) {
   return `${role}:${page}:${status}:${search}`;
 }
 
@@ -225,7 +229,8 @@ export default function UsersPage() {
         params.set("bundle", "1");
         if (sync) params.set("sync", "1");
         if (statusFilter !== "all") params.set("status", statusFilter);
-        if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+        if (debouncedSearch.trim())
+          params.set("search", debouncedSearch.trim());
 
         const res = await fetch(`/api/admin/app-users?${params.toString()}`);
         const data = (await res.json().catch(() => ({}))) as BundleResponse;
@@ -278,7 +283,8 @@ export default function UsersPage() {
         params.set("page", String(page));
         params.set("limit", String(PAGE_SIZE));
         if (statusFilter !== "all") params.set("status", statusFilter);
-        if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+        if (debouncedSearch.trim())
+          params.set("search", debouncedSearch.trim());
 
         const res = await fetch(`/api/admin/app-users?${params.toString()}`);
         const data = (await res.json().catch(() => ({}))) as PageResponse;
@@ -361,7 +367,10 @@ export default function UsersPage() {
       });
       void loadBundle(false, true);
     } catch (err) {
-      reportClientError(err, { feature: "admin-users", extra: { action: "update-status" } });
+      reportClientError(err, {
+        feature: "admin-users",
+        extra: { action: "update-status" },
+      });
       addToast({
         description:
           err instanceof Error ? err.message : "Failed to update user",
@@ -375,13 +384,13 @@ export default function UsersPage() {
   const tabSummary =
     selectedTab === "teacher"
       ? {
-        total: summary?.teachers ?? 0,
-        active: users.filter((u) => u.statusValue === "active").length,
-      }
+          total: summary?.teachers ?? 0,
+          active: users.filter((u) => u.statusValue === "active").length,
+        }
       : {
-        total: summary?.candidates ?? 0,
-        active: users.filter((u) => u.statusValue === "active").length,
-      };
+          total: summary?.candidates ?? 0,
+          active: users.filter((u) => u.statusValue === "active").length,
+        };
 
   return (
     <div className="w-full space-y-2 px-4">
@@ -401,7 +410,10 @@ export default function UsersPage() {
         className="w-full justify-center"
       >
         <Tab key="teacher" title={`Teachers (${summary?.teachers ?? 0})`} />
-        <Tab key="candidate" title={`Candidates (${summary?.candidates ?? 0})`} />
+        <Tab
+          key="candidate"
+          title={`Candidates (${summary?.candidates ?? 0})`}
+        />
       </Tabs>
       <AdminSearchBar
         searchValue={searchQuery}
@@ -467,145 +479,162 @@ export default function UsersPage() {
         <div className="py-16 text-center text-default-500">
           {isRefreshing ? "Loading users…" : "Syncing and loading users…"}
         </div>
-      ) : <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-        {users.map((user) => (
-          <Card key={user.id} className="w-full border border-default-200">
-            <CardHeader className="flex gap-3">
-              <div className="w-full flex flex-row items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary font-semibold">
-                    {user.avatarUrl ? (
-                      <img
-                        src={user.avatarUrl}
-                        alt={user.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      getInitials(user.name) || (
-                        <User className="text-primary" size={24} />
-                      )
-                    )}
+      ) : (
+        <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+          {users.map((user) => (
+            <Card key={user.id} className="w-full border border-default-200">
+              <CardHeader className="flex gap-3">
+                <div className="w-full flex flex-row items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary font-semibold">
+                      {user.avatarUrl ? (
+                        <img
+                          src={user.avatarUrl}
+                          alt={user.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        getInitials(user.name) || (
+                          <User className="text-primary" size={24} />
+                        )
+                      )}
+                    </div>
+                    <div className="flex flex-col">
+                      <p className="text-md font-semibold">{user.name}</p>
+                      <p className="text-small text-default-500 capitalize">
+                        {user.role}
+                      </p>
+                      <p className="text-tiny text-default-400">
+                        @{user.username}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex flex-col">
-                    <p className="text-md font-semibold">{user.name}</p>
-                    <p className="text-small text-default-500 capitalize">
-                      {user.role}
-                    </p>
-                    <p className="text-tiny text-default-400">@{user.username}</p>
-                  </div>
-                </div>
 
-                <Chip
-                  size="sm"
-                  variant="flat"
-                  color={
-                    user.statusValue === "active"
-                      ? "success"
-                      : user.statusValue === "blocked"
-                        ? "warning"
-                        : "default"
-                  }
-                >
-                  {statusLabels[user.statusValue]}
-                </Chip></div>
-            </CardHeader>
-            <CardBody className="space-y-2">
-              <div className="flex items-center gap-2 text-sm">
-                <Mail size={16} className="text-default-400" />
-                <span className="text-default-600">{user.email}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Phone size={16} className="text-default-400" />
-                <span className="text-default-600">
-                  {user.phone ? formatPhone(user.phone) : "—"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Calendar size={16} className="text-default-400" />
-                <span className="text-default-600">
-                  Joined: {new Date(user.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Globe size={16} className="text-default-400" />
-                <span className="text-default-600">
-                  {user.onboardingCompleted
-                    ? "Onboarding complete"
-                    : "Onboarding pending"}
-                </span>
-              </div>
-            </CardBody>
-            <CardFooter className="gap-2">
-              <Button
-                size="sm"
-                variant="flat"
-                color="primary"
-                className="flex-1"
-                as="a"
-                href={user.verifyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                View Profile
-              </Button>
-            </CardFooter>
-            <CardFooter className="gap-2 pt-0">
-              {user.statusValue === "active" ? (
-                <Button
-                  size="sm"
-                  variant="flat"
-                  color="warning"
-                  startContent={<Ban size={16} />}
-                  className="flex-1"
-                  isLoading={actioningId === user.id}
-                  onPress={() => void handleStatusChange(user.id, "blocked")}
-                >
-                  Block
-                </Button>
-              ) : user.statusValue === "blocked" ? (
-                <Button
-                  size="sm"
-                  variant="flat"
-                  color="success"
-                  startContent={<BadgeCheck size={16} />}
-                  className="flex-1"
-                  isLoading={actioningId === user.id}
-                  onPress={() => void handleStatusChange(user.id, "active")}
-                >
-                  Unblock
-                </Button>
-              ) : (
-                <Button size="sm" variant="flat" className="flex-1" isDisabled>
-                  Deleted
-                </Button>
-              )}
-
-              {user.statusValue !== "deleted" ? (
-                <Button
-                  size="sm"
-                  variant="flat"
-                  color="danger"
-                  startContent={<Trash2 size={16} />}
-                  isLoading={actioningId === user.id}
-                  onPress={() => {
-                    if (
-                      window.confirm(
-                        `Delete ${user.name}? This will mark the account as deleted.`,
-                      )
-                    ) {
-                      void handleStatusChange(user.id, "deleted");
+                  <Chip
+                    size="sm"
+                    variant="flat"
+                    color={
+                      user.statusValue === "active"
+                        ? "success"
+                        : user.statusValue === "blocked"
+                          ? "warning"
+                          : "default"
                     }
-                  }}
+                  >
+                    {statusLabels[user.statusValue]}
+                  </Chip>
+                </div>
+              </CardHeader>
+              <CardBody className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail size={16} className="text-default-400" />
+                  <span className="text-default-600">{user.email}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone size={16} className="text-default-400" />
+                  <span className="text-default-600">
+                    {user.phone ? formatPhone(user.phone) : "—"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar size={16} className="text-default-400" />
+                  <span className="text-default-600">
+                    Joined: {new Date(user.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <RefreshCw size={16} className="text-default-400" />
+                  <span className="text-default-600">
+                    Last login:{" "}
+                    {user.lastLogin
+                      ? new Date(user.lastLogin).toLocaleString()
+                      : "Never"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Globe size={16} className="text-default-400" />
+                  <span className="text-default-600">
+                    {user.onboardingCompleted
+                      ? "Onboarding complete"
+                      : "Onboarding pending"}
+                  </span>
+                </div>
+              </CardBody>
+              <CardFooter className="gap-2">
+                <Button
+                  size="sm"
+                  variant="flat"
+                  color="primary"
+                  className="flex-1"
+                  as="a"
+                  href={user.verifyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
-                  Delete
+                  View Profile
                 </Button>
-              ) : null}
-            </CardFooter>
-          </Card>
-        ))}
-      </div>}
+              </CardFooter>
+              <CardFooter className="gap-2 pt-0">
+                {user.statusValue === "active" ? (
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="warning"
+                    startContent={<Ban size={16} />}
+                    className="flex-1"
+                    isLoading={actioningId === user.id}
+                    onPress={() => void handleStatusChange(user.id, "blocked")}
+                  >
+                    Block
+                  </Button>
+                ) : user.statusValue === "blocked" ? (
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="success"
+                    startContent={<BadgeCheck size={16} />}
+                    className="flex-1"
+                    isLoading={actioningId === user.id}
+                    onPress={() => void handleStatusChange(user.id, "active")}
+                  >
+                    Unblock
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    className="flex-1"
+                    isDisabled
+                  >
+                    Deleted
+                  </Button>
+                )}
 
-
+                {user.statusValue !== "deleted" ? (
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="danger"
+                    startContent={<Trash2 size={16} />}
+                    isLoading={actioningId === user.id}
+                    onPress={() => {
+                      if (
+                        window.confirm(
+                          `Delete ${user.name}? This will mark the account as deleted.`,
+                        )
+                      ) {
+                        void handleStatusChange(user.id, "deleted");
+                      }
+                    }}
+                  >
+                    Delete
+                  </Button>
+                ) : null}
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {!isLoading && users.length === 0 && (
         <div className="text-center py-12">

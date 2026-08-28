@@ -132,6 +132,19 @@ export async function createAdmin(params: {
     createdBy: new mongoose.Types.ObjectId(creatorAdminId),
   });
 
+  // Sync initial permissions and metadata to Clerk
+  try {
+    await clerkService.updateAdminMetadata({
+      clerkId: admin.clerkId,
+      role: admin.role,
+      isAdmin: true,
+      requirePasswordChange: true,
+      permissions: admin.permissions,
+    });
+  } catch (err) {
+    console.error("[createAdmin] Failed to sync admin metadata to Clerk:", err);
+  }
+
   // Log action
   await logAction({
     adminId: creatorAdminId,
@@ -278,6 +291,21 @@ export async function updateAdminPermissions(params: {
   admin.permissions = { ...admin.permissions, ...permissions };
   await admin.save();
 
+  // Sync updated permissions to Clerk
+  try {
+    await clerkService.updateAdminMetadata({
+      clerkId: admin.clerkId,
+      role: admin.role,
+      isAdmin: true,
+      permissions: admin.permissions,
+    });
+  } catch (err) {
+    console.error(
+      "[updateAdminPermissions] Failed to sync permissions to Clerk:",
+      err,
+    );
+  }
+
   // Log action
   await logAction({
     adminId: updaterAdminId,
@@ -336,6 +364,16 @@ export async function toggleAdminStatus(params: {
 
   admin.isActive = isActive;
   await admin.save();
+
+  // When deactivating, ban the Clerk user; when reactivating, unban.
+  try {
+    await clerkService.setAdminLockStatus(admin.clerkId, !isActive);
+  } catch (err) {
+    console.error(
+      "[toggleAdminStatus] Failed to update Clerk for admin status change:",
+      err,
+    );
+  }
 
   // Log action
   await logAction({
@@ -504,6 +542,84 @@ export async function resetAdminPassword(params: {
   return {
     success: true,
     message: "Password reset initiated",
+  };
+}
+
+/**
+ * Change admin password directly in Clerk and clear forced password change state
+ */
+export async function changeAdminPassword(params: {
+  adminId: string;
+  newPassword: string;
+  changedByAdminId: string;
+  changedByClerkId: string;
+  changedByUsername: string;
+  ipAddress?: string;
+  userAgent?: string;
+}) {
+  const {
+    adminId,
+    newPassword,
+    changedByAdminId,
+    changedByClerkId,
+    changedByUsername,
+    ipAddress,
+    userAgent,
+  } = params;
+
+  await dbConnect();
+
+  const admin = await Admin.findById(adminId);
+
+  if (!admin) {
+    return {
+      success: false,
+      error: "Admin not found",
+    };
+  }
+
+  const clerkResult = await clerkService.setAdminPassword(
+    admin.clerkId,
+    newPassword,
+  );
+  if (!clerkResult.success) {
+    return {
+      success: false,
+      error: clerkResult.error || "Failed to update admin password",
+    };
+  }
+
+  admin.requirePasswordChange = false;
+  admin.isLocked = false;
+  admin.lockedAt = null;
+  admin.failedLoginAttempts = 0;
+  admin.lastFailedLoginAt = null;
+  await admin.save();
+
+  await clerkService.updateAdminMetadata({
+    clerkId: admin.clerkId,
+    role: admin.role,
+    isAdmin: true,
+    requirePasswordChange: false,
+    isLocked: false,
+    permissions: admin.permissions,
+  });
+
+  await logAction({
+    adminId: changedByAdminId,
+    adminClerkId: changedByClerkId,
+    adminUsername: changedByUsername,
+    action: "admin.password_changed",
+    targetType: "Admin",
+    targetId: adminId,
+    targetIdentifier: admin.username,
+    ipAddress,
+    userAgent,
+  });
+
+  return {
+    success: true,
+    message: "Password updated successfully",
   };
 }
 

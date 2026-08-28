@@ -28,6 +28,7 @@ const auditLogSchema = new Schema(
         "admin.terminated",
         "admin.unlocked",
         "admin.password_reset",
+        "admin.password_changed",
         "admin.permissions_updated",
 
         // User management

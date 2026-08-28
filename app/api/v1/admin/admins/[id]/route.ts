@@ -1,5 +1,5 @@
 import { handleApiError } from "@/lib/api-utils";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import * as adminService from "@/lib/services/admin.service";
 import Admin from "@/lib/models/Admin";
@@ -20,7 +20,24 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const metadata = sessionClaims?.publicMetadata as Record<string, unknown>;
+    let metadata = sessionClaims?.publicMetadata as
+      | Record<string, unknown>
+      | undefined;
+
+    if (metadata?.isAdmin !== true) {
+      try {
+        const client = await clerkClient();
+        const clerkUser = await client.users.getUser(userId);
+        metadata = clerkUser.publicMetadata as
+          | Record<string, unknown>
+          | undefined;
+      } catch (err) {
+        console.warn(
+          "[GET /api/v1/admin/admins/[id]] Could not fetch Clerk metadata fallback:",
+          err,
+        );
+      }
+    }
 
     if (metadata?.isAdmin !== true) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -44,7 +61,10 @@ export async function GET(
     }
 
     // Sub-superadmins can only view support admins
-    if (currentAdmin.role === "admin" && result.admin.role !== "support_admin") {
+    if (
+      currentAdmin.role === "admin" &&
+      result.admin.role !== "support_admin"
+    ) {
       return NextResponse.json(
         { error: "You can only view support admins" },
         { status: 403 },
@@ -72,7 +92,24 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const metadata = sessionClaims?.publicMetadata as Record<string, unknown>;
+    let metadata = sessionClaims?.publicMetadata as
+      | Record<string, unknown>
+      | undefined;
+
+    if (metadata?.isAdmin !== true) {
+      try {
+        const client = await clerkClient();
+        const clerkUser = await client.users.getUser(userId);
+        metadata = clerkUser.publicMetadata as
+          | Record<string, unknown>
+          | undefined;
+      } catch (err) {
+        console.warn(
+          "[PATCH /api/v1/admin/admins/[id]] Could not fetch Clerk metadata fallback:",
+          err,
+        );
+      }
+    }
 
     if (metadata?.isAdmin !== true) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

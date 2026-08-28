@@ -6,6 +6,13 @@ import AdminRole from "@/lib/models/admin/AdminRole";
 import dbConnect from "@/lib/db";
 import { handleApiError } from "@/lib/api-utils";
 
+function toIsoString(value: unknown): string | undefined {
+  if (!value) return undefined;
+  const date =
+    value instanceof Date ? value : new Date(value as string | number);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
 /**
  * POST /api/v1/admin/admins - Create new admin
  */
@@ -25,7 +32,9 @@ export async function POST(req: NextRequest) {
       try {
         const client = await clerkClient();
         const clerkUser = await client.users.getUser(userId as string);
-        metadata = clerkUser.publicMetadata as Record<string, unknown> | undefined;
+        metadata = clerkUser.publicMetadata as
+          | Record<string, unknown>
+          | undefined;
       } catch (err) {
         console.warn("Could not fetch Clerk user metadata fallback:", err);
       }
@@ -129,7 +138,9 @@ export async function GET(req: NextRequest) {
       try {
         const client = await clerkClient();
         const clerkUser = await client.users.getUser(userId as string);
-        metadata = clerkUser.publicMetadata as Record<string, unknown> | undefined;
+        metadata = clerkUser.publicMetadata as
+          | Record<string, unknown>
+          | undefined;
       } catch (err) {
         console.warn("Could not fetch Clerk user metadata fallback:", err);
       }
@@ -181,19 +192,27 @@ export async function GET(req: NextRequest) {
     if (result.admins && result.admins.length > 0) {
       try {
         const client = await clerkClient();
-        const clerkIds = result.admins.map((a: any) => a.clerkId).filter(Boolean);
+        const clerkIds = result.admins
+          .map((a: any) => a.clerkId)
+          .filter(Boolean);
         if (clerkIds.length > 0) {
           const clerkUsers = await client.users.getUserList({
             userId: clerkIds,
             limit: 100, // Safe limit for typical admin lists
           });
           const avatarMap = new Map<string, string>();
+          const lastLoginMap = new Map<string, string>();
           clerkUsers.data.forEach((u) => {
             avatarMap.set(u.id, u.imageUrl);
+            const lastLogin = toIsoString(u.lastSignInAt);
+            if (lastLogin) {
+              lastLoginMap.set(u.id, lastLogin);
+            }
           });
           result.admins = result.admins.map((a: any) => ({
             ...a,
             avatarUrl: a.clerkId ? avatarMap.get(a.clerkId) : undefined,
+            lastLogin: a.clerkId ? lastLoginMap.get(a.clerkId) : undefined,
           }));
         }
       } catch (err) {

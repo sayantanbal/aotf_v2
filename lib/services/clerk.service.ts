@@ -16,10 +16,11 @@ export interface CreateAdminUserParams {
 
 export interface UpdateAdminMetadataParams {
   clerkId: string;
-  role: string;
+  role?: string;
   isAdmin: boolean;
   requirePasswordChange?: boolean;
   isLocked?: boolean;
+  permissions?: Record<string, boolean>;
 }
 
 function normalizeAotfRole(role: string) {
@@ -92,9 +93,17 @@ export async function updateAdminMetadata(params: UpdateAdminMetadataParams) {
     const client = await clerkClient();
     const publicMetadata: Record<string, unknown> = {
       isAdmin,
-      role,
-      aotfRole: normalizeAotfRole(role),
     };
+    if (role) {
+      publicMetadata.role = role;
+      publicMetadata.aotfRole = normalizeAotfRole(role);
+    }
+    // attach permissions if provided so Clerk's shallow merge overwrites old object
+    if ((params as UpdateAdminMetadataParams).permissions !== undefined) {
+      publicMetadata.permissions = (
+        params as UpdateAdminMetadataParams
+      ).permissions;
+    }
     if (requirePasswordChange !== undefined) {
       publicMetadata.requirePasswordChange = requirePasswordChange;
     }
@@ -233,23 +242,41 @@ export async function updateAdminUser(
 }
 
 /**
+ * Set a new password for an admin in Clerk
+ */
+export async function setAdminPassword(clerkId: string, password: string) {
+  try {
+    const client = await clerkClient();
+    await client.users.updateUser(clerkId, {
+      password,
+      skipPasswordChecks: false,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("[clerk-service] Error setting admin password:", error);
+    return {
+      success: false,
+      error: "Failed to update admin password",
+    };
+  }
+}
+
+/**
  * Lock/unlock admin account
  */
 export async function setAdminLockStatus(clerkId: string, isLocked: boolean) {
   try {
+    await updateAdminMetadata({
+      clerkId,
+      isAdmin: true,
+      isLocked,
+    });
     const client = await clerkClient();
     if (isLocked) {
       await client.users.banUser(clerkId);
     } else {
       await client.users.unbanUser(clerkId);
     }
-    // Also update metadata
-    await updateAdminMetadata({
-      clerkId,
-      role: "admin", // This will be overwritten by the actual role in the calling function
-      isAdmin: true,
-      isLocked,
-    });
     return { success: true };
   } catch (error) {
     console.error("[clerk-service] Error setting admin lock status:", error);

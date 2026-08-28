@@ -46,36 +46,55 @@ function normalizeText(value?: string | null) {
   return value?.trim().toLowerCase() ?? "";
 }
 
+function toIsoString(value: unknown): string | null {
+  if (!value) return null;
+  const date =
+    value instanceof Date ? value : new Date(value as string | number);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 function toDbRole(role: string): AppUserDbRole {
   return roleMap[role] ?? (role as AppUserDbRole);
 }
 
 async function requireManageUsersAdmin(userId: string) {
   const { sessionClaims } = await auth();
-  let metadata = sessionClaims?.publicMetadata as Record<string, unknown> | undefined;
+  let metadata = sessionClaims?.publicMetadata as
+    | Record<string, unknown>
+    | undefined;
 
   if (metadata?.isAdmin !== true) {
     try {
       const client = await clerkClient();
       const clerkUser = await client.users.getUser(userId);
-      metadata = clerkUser.publicMetadata as Record<string, unknown> | undefined;
+      metadata = clerkUser.publicMetadata as
+        | Record<string, unknown>
+        | undefined;
     } catch {
       // Fall through to DB admin lookup.
     }
   }
 
   if (metadata?.isAdmin !== true) {
-    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    return {
+      error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+    };
   }
 
   const currentAdmin = await Admin.findOne({ clerkId: userId });
   if (!currentAdmin || !currentAdmin.isActive) {
     return {
-      error: NextResponse.json({ error: "Forbidden: admin not active" }, { status: 403 }),
+      error: NextResponse.json(
+        { error: "Forbidden: admin not active" },
+        { status: 403 },
+      ),
     };
   }
 
-  if (currentAdmin.role !== "super_admin" && !currentAdmin.permissions.canManageUsers) {
+  if (
+    currentAdmin.role !== "super_admin" &&
+    !currentAdmin.permissions.canManageUsers
+  ) {
     return {
       error: NextResponse.json(
         { error: "You don't have permission to manage users" },
@@ -103,14 +122,23 @@ function buildAggregationPipeline(
   statusQuery: Record<string, unknown>,
   adminClerkIds: Set<string>,
   search: string,
-  baseMatch: Record<string, unknown> = {}
+  baseMatch: Record<string, unknown> = {},
 ) {
   const pipeline: any[] = [
-    { $match: { ...statusQuery, ...baseMatch, clerkId: { $nin: Array.from(adminClerkIds) } } }
+    {
+      $match: {
+        ...statusQuery,
+        ...baseMatch,
+        clerkId: { $nin: Array.from(adminClerkIds) },
+      },
+    },
   ];
 
   if (search) {
-    const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "i");
+    const searchRegex = new RegExp(
+      search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+      "i",
+    );
     pipeline.push({
       $lookup: {
         from: "profiles",
@@ -147,7 +175,12 @@ async function fetchRolePage(
   const dbRole = toDbRole(friendlyRole);
   const limit = PAGE_SIZE;
 
-  const basePipeline = buildAggregationPipeline(statusQuery, adminClerkIds, search, { role: dbRole });
+  const basePipeline = buildAggregationPipeline(
+    statusQuery,
+    adminClerkIds,
+    search,
+    { role: dbRole },
+  );
 
   // Count total matches for this role
   const countPipeline = [...basePipeline, { $count: "total" }];
@@ -194,7 +227,10 @@ async function fetchRolePage(
           clerkData = await client.users.getUser(clerkIdStr);
         } catch (err: any) {
           if (err.status !== 404) {
-            console.error(`[app-users] Failed to fetch clerk user ${clerkIdStr}:`, err.message || err);
+            console.error(
+              `[app-users] Failed to fetch clerk user ${clerkIdStr}:`,
+              err.message || err,
+            );
           }
         }
 
@@ -206,15 +242,20 @@ async function fetchRolePage(
         }
 
         const primaryEmail = clerkData?.emailAddresses?.find(
-          (e: { id: string; emailAddress: string }) => e.id === clerkData.primaryEmailAddressId
+          (e: { id: string; emailAddress: string }) =>
+            e.id === clerkData.primaryEmailAddressId,
         );
-        const email = primaryEmail?.emailAddress ?? clerkData?.emailAddresses?.[0]?.emailAddress ?? null;
+        const email =
+          primaryEmail?.emailAddress ??
+          clerkData?.emailAddresses?.[0]?.emailAddress ??
+          null;
         const displayName =
           profileData?.displayName ??
           clerkData?.fullName?.trim() ??
           clerkData?.username ??
           null;
         const avatarUrl = profileData?.avatarUrl ?? clerkData?.imageUrl ?? null;
+        const lastLogin = toIsoString(clerkData?.lastSignInAt);
 
         return {
           id: String(user._id),
@@ -229,6 +270,7 @@ async function fetchRolePage(
           onboardingCompleted: user.onboardingCompleted,
           plan: user.plan,
           avatarUrl,
+          lastLogin,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
           location: profileData?.location ?? null,
@@ -237,7 +279,7 @@ async function fetchRolePage(
           profileUrl: `/u/${encodeURIComponent(user.username)}`,
           verifyUrl: `/verify/${encodeURIComponent(`AOTF-${user.role === "teacher_candidate" ? "C" : "T"}-${user.username.toUpperCase()}`)}`,
         };
-      })
+      }),
     )
   ).filter((u): u is NonNullable<typeof u> => u !== null);
 
@@ -283,7 +325,14 @@ async function buildGlobalSummary(
 
   const [result] = await User.aggregate(pipeline);
   if (!result) {
-    return { total: 0, active: 0, blocked: 0, deleted: 0, teachers: 0, candidates: 0 };
+    return {
+      total: 0,
+      active: 0,
+      blocked: 0,
+      deleted: 0,
+      teachers: 0,
+      candidates: 0,
+    };
   }
 
   return {
@@ -335,7 +384,10 @@ export async function POST(req: Request) {
   const result = await createAppUser({ name, email, phone, role });
   if (!result.success) {
     const status = result.code === "duplicate_email" ? 409 : 400;
-    return NextResponse.json({ error: result.error, code: result.code }, { status });
+    return NextResponse.json(
+      { error: result.error, code: result.code },
+      { status },
+    );
   }
 
   return NextResponse.json({ ok: true, user: result }, { status: 201 });
@@ -393,8 +445,7 @@ export async function GET(req: Request) {
     });
   }
 
-  const friendlyRole =
-    filters.role === "candidate" ? "candidate" : "teacher";
+  const friendlyRole = filters.role === "candidate" ? "candidate" : "teacher";
   const page = Math.max(Number(filters.page ?? 1) || 1, 1);
   const rolePage = await fetchRolePage(
     friendlyRole,

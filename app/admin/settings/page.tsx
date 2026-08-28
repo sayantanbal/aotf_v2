@@ -238,7 +238,7 @@ function AdminAccountsSection() {
         if (!mounted) return;
         setMyAdmin(json.admin ?? null);
       } catch (e) {
-      reportClientError(e, { feature: "admin-settings" });
+        reportClientError(e, { feature: "admin-settings" });
         // ignore
       }
     })();
@@ -270,7 +270,7 @@ function AdminAccountsSection() {
           })),
         );
       } catch (err) {
-      reportClientError(err, { feature: "admin-settings" });
+        reportClientError(err, { feature: "admin-settings" });
         if (!mounted) return;
         setRoleError(
           err instanceof Error ? err.message : "Failed to load roles",
@@ -328,7 +328,8 @@ function AdminAccountsSection() {
             role: normalizeAdminRole(row.role),
             status: row.isActive === false ? "inactive" : "active",
             createdAt: String(row.createdAt ?? new Date().toISOString()),
-            lastLogin: undefined,
+            lastLogin:
+              typeof row.lastLogin === "string" ? row.lastLogin : undefined,
             permissions:
               typeof row.permissions === "object" && row.permissions !== null
                 ? (row.permissions as Record<string, boolean>)
@@ -338,7 +339,7 @@ function AdminAccountsSection() {
           })),
         );
       } catch (e) {
-      reportClientError(e, { feature: "admin-settings" });
+        reportClientError(e, { feature: "admin-settings" });
         console.error("Failed to fetch admins:", e);
       } finally {
         if (mounted) setIsLoadingAdmins(false);
@@ -731,12 +732,19 @@ function AdminAccountsSection() {
 
   const validatePwdForm = (): boolean => {
     const errors: Record<string, string> = {};
-    if (!pwdForm.oldPassword)
+    const isSelfChange =
+      !!pwdTarget &&
+      !!meta?.adminId &&
+      String(pwdTarget.id) === String(meta.adminId);
+
+    if (isSelfChange && !pwdForm.oldPassword) {
       errors.oldPassword = "Current password is required";
+    }
+
     if (!pwdForm.newPassword) errors.newPassword = "New password is required";
     else if (pwdForm.newPassword.length < 8)
       errors.newPassword = "Password must be at least 8 characters";
-    else if (pwdForm.newPassword === pwdForm.oldPassword)
+    else if (isSelfChange && pwdForm.newPassword === pwdForm.oldPassword)
       errors.newPassword = "New password must differ from current password";
     if (pwdForm.newPassword !== pwdForm.confirmPassword)
       errors.confirmPassword = "Passwords do not match";
@@ -746,16 +754,38 @@ function AdminAccountsSection() {
 
   const handleChangePassword = async () => {
     if (!validatePwdForm()) return;
+    if (!pwdTarget) return;
+
     setIsChangingPwd(true);
     try {
-      // TODO: wire to real API
-      await new Promise((r) => setTimeout(r, 800));
+      const res = await fetch(
+        `/api/v1/admin/admins/${pwdTarget.id}/change-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currentPassword: pwdForm.oldPassword,
+            newPassword: pwdForm.newPassword,
+          }),
+        },
+      );
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        addToast({
+          description: json?.error || "Failed to change password",
+          color: "danger",
+        });
+        return;
+      }
+
       addToast({
-        description: `Password updated for ${pwdTarget?.name}`,
+        description: json?.message || `Password updated for ${pwdTarget.name}`,
         color: "success",
       });
       closePwd();
       setPwdTarget(null);
+      setPwdForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
     } catch {
       addToast({
         description: "Failed to change password",
