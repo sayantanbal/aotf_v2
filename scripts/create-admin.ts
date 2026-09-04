@@ -41,12 +41,14 @@ type AdminPermissions = {
   canCreateJobPosts: boolean;
   canEditPosts: boolean;
   canDeletePosts: boolean;
+  canManageWhatsAppGroups: boolean;
   canHandleEnquiries: boolean;
   canHandleFeedbacks: boolean;
   canUpdateEnquiryStatus: boolean;
   canCallApplicants: boolean;
   canProcessRefunds: boolean;
   canViewPayments: boolean;
+  canRecoverPayments: boolean;
   canViewAnalytics: boolean;
   canExportData: boolean;
   canManageAdmins: boolean;
@@ -166,7 +168,10 @@ function buildName(username: string) {
   );
 }
 
-const ROLE_PRESETS: Record<AdminRole, { role: string; aotfRole: string; permissions: AdminPermissions }> = {
+const ROLE_PRESETS: Record<
+  AdminRole,
+  { role: string; aotfRole: string; permissions: AdminPermissions }
+> = {
   super_admin: {
     role: "super_admin",
     aotfRole: "SUPER_ADMIN",
@@ -179,12 +184,14 @@ const ROLE_PRESETS: Record<AdminRole, { role: string; aotfRole: string; permissi
       canCreateJobPosts: true,
       canEditPosts: true,
       canDeletePosts: true,
+      canManageWhatsAppGroups: true,
       canHandleEnquiries: true,
       canHandleFeedbacks: true,
       canUpdateEnquiryStatus: true,
       canCallApplicants: true,
       canProcessRefunds: true,
       canViewPayments: true,
+      canRecoverPayments: true,
       canViewAnalytics: true,
       canExportData: true,
       canManageAdmins: true,
@@ -208,12 +215,14 @@ const ROLE_PRESETS: Record<AdminRole, { role: string; aotfRole: string; permissi
       canCreateJobPosts: true,
       canEditPosts: true,
       canDeletePosts: true,
+      canManageWhatsAppGroups: false,
       canHandleEnquiries: true,
       canHandleFeedbacks: true,
       canUpdateEnquiryStatus: true,
       canCallApplicants: true,
       canProcessRefunds: false,
       canViewPayments: true,
+      canRecoverPayments: false,
       canViewAnalytics: false,
       canExportData: false,
       canManageAdmins: true,
@@ -237,12 +246,14 @@ const ROLE_PRESETS: Record<AdminRole, { role: string; aotfRole: string; permissi
       canCreateJobPosts: false,
       canEditPosts: false,
       canDeletePosts: false,
+      canManageWhatsAppGroups: false,
       canHandleEnquiries: true,
       canHandleFeedbacks: true,
       canUpdateEnquiryStatus: true,
       canCallApplicants: true,
       canProcessRefunds: false,
       canViewPayments: false,
+      canRecoverPayments: false,
       canViewAnalytics: false,
       canExportData: false,
       canManageAdmins: false,
@@ -266,12 +277,14 @@ const ROLE_PRESETS: Record<AdminRole, { role: string; aotfRole: string; permissi
       canCreateJobPosts: true,
       canEditPosts: true,
       canDeletePosts: true,
+      canManageWhatsAppGroups: false,
       canHandleEnquiries: true,
       canHandleFeedbacks: true,
       canUpdateEnquiryStatus: true,
       canCallApplicants: false,
       canProcessRefunds: false,
       canViewPayments: false,
+      canRecoverPayments: false,
       canViewAnalytics: false,
       canExportData: false,
       canManageAdmins: false,
@@ -357,7 +370,7 @@ async function createClerkUser(params: {
       lastName,
       skipPasswordRequirement: false,
       skipPasswordChecks: false,
-      legal_accepted_at: new Date().toISOString(),
+      legalAcceptedAt: new Date(),
       publicMetadata: buildPublicMetadata(params.role),
     });
   } catch (error: unknown) {
@@ -383,7 +396,7 @@ async function updateClerkUser(params: {
   await client.users.updateUser(params.clerkId, {
     username: params.username,
     password: params.password,
-    legal_accepted_at: new Date().toISOString(),
+    legalAcceptedAt: new Date(),
     firstName: firstName || params.username,
     lastName,
     skipPasswordChecks: false,
@@ -465,10 +478,18 @@ async function main() {
       if (existingByEmail) {
         clerkId = existingByEmail.id;
         clerkEmail = existingByEmail.emailAddresses[0]?.emailAddress ?? email;
-        console.log(`Updating existing Clerk user ${clerkId} for ${clerkEmail}`);
+        console.log(
+          `Updating existing Clerk user ${clerkId} for ${clerkEmail}`,
+        );
         await updateClerkUser({ clerkId, username, password, name, role });
       } else {
-        const created = await createClerkUser({ username, email, password, name, role });
+        const created = await createClerkUser({
+          username,
+          email,
+          password,
+          name,
+          role,
+        });
 
         if (!created) {
           throw new Error(

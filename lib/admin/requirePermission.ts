@@ -1,8 +1,9 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import AdminRole from "@/lib/models/admin/AdminRole";
 import AdminUser from "@/lib/models/admin/AdminUser";
+import Admin from "@/lib/models/Admin";
 import type { Permission } from "@/lib/admin/permissions";
 import type { IAdminUser } from "@/lib/models/admin/AdminUser";
 
@@ -12,7 +13,9 @@ type PermissionResult = {
 };
 
 export function requirePermission(...required: Permission[]) {
-  return async function permissionGuard(_req: Request): Promise<PermissionResult> {
+  return async function permissionGuard(
+    _req: Request,
+  ): Promise<PermissionResult> {
     await dbConnect();
     const { userId } = await auth();
 
@@ -20,6 +23,39 @@ export function requirePermission(...required: Permission[]) {
       return {
         admin: null,
         error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      };
+    }
+
+    if (required.includes("whatsapp:manage")) {
+      const legacyAdmin = await Admin.findOne({ clerkId: userId });
+      let metadata = {} as Record<string, unknown>;
+      try {
+        const claims = (await auth()).sessionClaims;
+        metadata = (claims?.publicMetadata ?? {}) as Record<string, unknown>;
+        if (metadata.isAdmin !== true) {
+          const client = await clerkClient();
+          const clerkUser = await client.users.getUser(userId);
+          metadata = clerkUser.publicMetadata as Record<string, unknown>;
+        }
+      } catch {
+        // The database permission check below remains authoritative.
+      }
+
+      const hasPermission =
+        legacyAdmin?.isActive === true &&
+        (legacyAdmin.role === "super_admin" ||
+          legacyAdmin.permissions.canManageWhatsAppGroups === true ||
+          metadata.canManageWhatsAppGroups === true ||
+          (metadata.permissions as Record<string, unknown> | undefined)
+            ?.canManageWhatsAppGroups === true);
+
+      if (hasPermission) return { admin: null };
+      return {
+        admin: null,
+        error: NextResponse.json(
+          { error: "Insufficient permissions" },
+          { status: 403 },
+        ),
       };
     }
 

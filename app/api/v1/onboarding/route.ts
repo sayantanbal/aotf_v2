@@ -6,6 +6,7 @@ import User from "@/lib/models/User";
 import Payment from "@/lib/models/Payment";
 import OnboardingDetails from "@/lib/models/OnboardingDetails";
 import { ensureUserRecord } from "@/lib/utils/ensure-user";
+import { syncUserMetadataToClerk } from "@/lib/services/clerk-sync.service";
 
 export async function PATCH(req: Request) {
   try {
@@ -72,7 +73,16 @@ export async function PATCH(req: Request) {
         { error: "Invalid jobExp value" },
         { status: 400 },
       );
-    } const validBoards = ["CBSE", "ICSE", "ISC", "IB", "WB-Bengali", "WB-English"];
+    }
+
+    const validBoards = [
+      "CBSE",
+      "ICSE",
+      "ISC",
+      "IB",
+      "WB-Bengali",
+      "WB-English",
+    ];
     if (board !== undefined && !validBoards.includes(board)) {
       return NextResponse.json(
         { error: "Invalid board value" },
@@ -103,7 +113,9 @@ export async function PATCH(req: Request) {
     if (board !== undefined) updateFields.board = board;
     if (plan !== undefined) updateFields.plan = plan;
     // Refresh the 72-hour TTL on every save while payment hasn't happened
-    updateFields.expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+    updateFields.expiresAt = user.paymentCompleted
+      ? null
+      : new Date(Date.now() + 72 * 60 * 60 * 1000);
 
     const onboardingDetails = await OnboardingDetails.findOneAndUpdate(
       { clerkId },
@@ -113,7 +125,32 @@ export async function PATCH(req: Request) {
 
     console.log(`[onboarding] Upserted onboarding details for ${clerkId}`);
 
-    return NextResponse.json({ success: true, onboardingDetails });
+    // Mark detailsCompleted on the User if all required fields are present
+    const allRequiredFilled =
+      !!onboardingDetails?.phone &&
+      !!onboardingDetails?.whatsapp &&
+      !!onboardingDetails?.teachingExp &&
+      !!onboardingDetails?.qualification &&
+      !!onboardingDetails?.board;
+
+    let userDoc = await User.findOne({ clerkId });
+    if (allRequiredFilled) {
+      if (userDoc && !userDoc.detailsCompleted) {
+        userDoc.detailsCompleted = true;
+        await userDoc.save(); // pre-save hook derives onboardingCompleted
+        // Fire-and-forget sync to Clerk
+        void syncUserMetadataToClerk(clerkId);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      onboardingDetails,
+      detailsCompleted: Boolean(userDoc?.detailsCompleted),
+      paymentCompleted: Boolean(userDoc?.paymentCompleted),
+      whatsappGroupCompleted: Boolean(userDoc?.whatsappGroupCompleted),
+      onboardingCompleted: Boolean(userDoc?.onboardingCompleted),
+    });
   } catch (error) {
     return handleApiError(error, "PATCH /api/v1/onboarding");
   }
@@ -127,22 +164,30 @@ export async function GET() {
         { error: "Authentication required" },
         { status: 401 },
       );
-    } await dbConnect();
+    }
+
+    await dbConnect();
 
     const [onboardingDetails, userDoc] = await Promise.all([
       OnboardingDetails.findOne({ clerkId }),
-      User.findOne({ clerkId }, { createdAt: 1, onboardingCompleted: 1 }),
+      User.findOne(
+        { clerkId },
+        {
+          createdAt: 1,
+          onboardingCompleted: 1,
+          detailsCompleted: 1,
+          paymentCompleted: 1,
+          whatsappGroupCompleted: 1,
+          hasTuitionAccess: 1,
+          hasCandidateAccess: 1,
+          createdByAdmin: 1,
+        },
+      ),
     ]);
-    if (!onboardingDetails) {
-      return NextResponse.json(
-        { error: "Onboarding details not found" },
-        { status: 404 },
-      );
-    }
 
     // Check if the user has a paid payment but onboardingCompleted is still false
     let paymentPaidButNotOnboarded = false;
-    if (userDoc && !userDoc.onboardingCompleted) {
+    if (userDoc && !userDoc.onboardingCompleted && !userDoc.paymentCompleted) {
       const paidPayment = await Payment.findOne({
         clerkId,
         status: "paid",
@@ -156,6 +201,10 @@ export async function GET() {
       onboardingDetails,
       createdAt: userDoc?.createdAt ?? null,
       onboardingCompleted: userDoc?.onboardingCompleted ?? false,
+      detailsCompleted: userDoc?.detailsCompleted ?? false,
+      paymentCompleted: userDoc?.paymentCompleted ?? false,
+      whatsappGroupCompleted: userDoc?.whatsappGroupCompleted ?? false,
+      createdByAdmin: userDoc?.createdByAdmin ?? false,
       paymentPaidButNotOnboarded,
     });
   } catch (error) {

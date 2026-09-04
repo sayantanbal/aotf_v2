@@ -19,6 +19,7 @@ interface StepperProps extends HTMLAttributes<HTMLDivElement> {
   validateStep?: (step: number) => boolean;
   /** Silent check — no side effects (no toasts/errors). Used only for button colour. */
   checkStep?: (step: number) => boolean;
+  isStepAvailable?: (step: number) => boolean;
   stepCircleContainerClassName?: string;
   stepContainerClassName?: string;
   contentClassName?: string;
@@ -42,6 +43,7 @@ export default function Stepper({
   onFinalStepCompleted = () => {},
   validateStep,
   checkStep,
+  isStepAvailable,
   stepCircleContainerClassName = "",
   stepContainerClassName = "",
   contentClassName = "",
@@ -60,6 +62,19 @@ export default function Stepper({
   const totalSteps = stepsArray.length;
   const isCompleted = currentStep > totalSteps;
   const isLastStep = currentStep === totalSteps;
+  const isAvailable = (step: number) => isStepAvailable?.(step) ?? true;
+  const nextAvailable = (step: number) => {
+    for (let candidate = step; candidate <= totalSteps; candidate += 1) {
+      if (isAvailable(candidate)) return candidate;
+    }
+    return totalSteps + 1;
+  };
+  const previousAvailable = (step: number) => {
+    for (let candidate = step; candidate >= 1; candidate -= 1) {
+      if (isAvailable(candidate)) return candidate;
+    }
+    return 0;
+  };
 
   const updateStep = (newStep: number) => {
     setCurrentStep(newStep);
@@ -70,9 +85,10 @@ export default function Stepper({
     }
   };
   const handleBack = () => {
-    if (currentStep > 1) {
+    const previousStep = previousAvailable(currentStep - 1);
+    if (previousStep > 0 && previousStep < currentStep) {
       setDirection(-1);
-      updateStep(currentStep - 1);
+      updateStep(previousStep);
     }
   };
 
@@ -83,7 +99,7 @@ export default function Stepper({
         return; // Don't proceed if validation fails
       }
       setDirection(1);
-      updateStep(currentStep + 1);
+      updateStep(nextAvailable(currentStep + 1));
     }
   };
 
@@ -97,6 +113,7 @@ export default function Stepper({
   };
 
   const handleStepClick = (clicked: number) => {
+    if (!isAvailable(clicked)) return;
     // Don't allow clicking if it's the current step
     if (clicked === currentStep) {
       return;

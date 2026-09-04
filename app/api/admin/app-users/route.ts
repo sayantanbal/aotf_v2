@@ -214,6 +214,17 @@ async function fetchRolePage(
   }
 
   const pageUsers = await User.aggregate(dataPipeline);
+  const creatorIds = pageUsers
+    .map((user) => user.createdByAdminClerkId)
+    .filter((id): id is string => Boolean(id));
+  const creatorAdmins = await Admin.find({
+    $or: creatorIds.map((clerkId) => ({ clerkId })),
+  })
+    .select("clerkId username")
+    .lean();
+  const creatorNames = new Map(
+    creatorAdmins.map((admin) => [String(admin.clerkId), admin.username]),
+  );
 
   const client = await clerkClient();
   const users = (
@@ -268,6 +279,16 @@ async function fetchRolePage(
           role: user.role,
           status: user.status,
           onboardingCompleted: user.onboardingCompleted,
+          detailsCompleted: Boolean(user.detailsCompleted),
+          paymentCompleted: Boolean(user.paymentCompleted),
+          whatsappGroupCompleted: Boolean(user.whatsappGroupCompleted),
+          createdByAdmin: Boolean(user.createdByAdmin),
+          createdByAdminClerkId: user.createdByAdminClerkId ?? null,
+          createdByAdminUsername: user.createdByAdminClerkId
+            ? (creatorNames.get(String(user.createdByAdminClerkId)) ?? null)
+            : null,
+          hasTuitionAccess: Boolean(user.hasTuitionAccess),
+          hasCandidateAccess: Boolean(user.hasCandidateAccess),
           plan: user.plan,
           avatarUrl,
           lastLogin,
@@ -359,14 +380,14 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     name?: string;
     email?: string;
-    phone?: string;
     role?: AdminCreateAppUserRole;
+    legalAcceptedAt?: string;
   };
 
   const name = body.name?.trim() ?? "";
   const email = body.email?.trim() ?? "";
-  const phone = body.phone?.trim() ?? "";
   const role = body.role ?? "teacher";
+  const legalAcceptedAt = body.legalAcceptedAt?.trim() ?? "";
 
   if (!name) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -374,14 +395,23 @@ export async function POST(req: Request) {
   if (!email) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
   }
-  if (!phone) {
-    return NextResponse.json({ error: "Phone is required" }, { status: 400 });
+  if (!legalAcceptedAt || Number.isNaN(Date.parse(legalAcceptedAt))) {
+    return NextResponse.json(
+      { error: "Legal acceptance time is required" },
+      { status: 400 },
+    );
   }
   if (role !== "teacher" && role !== "candidate") {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 
-  const result = await createAppUser({ name, email, phone, role });
+  const result = await createAppUser({
+    name,
+    email,
+    role,
+    legalAcceptedAt,
+    creatorClerkId: userId,
+  });
   if (!result.success) {
     const status = result.code === "duplicate_email" ? 409 : 400;
     return NextResponse.json(

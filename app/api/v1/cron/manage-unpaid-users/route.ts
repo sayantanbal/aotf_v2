@@ -43,21 +43,24 @@ export async function GET(req: NextRequest) {
   const twentyFiveDaysAgo = new Date(now - 25 * 24 * 60 * 60 * 1000);
 
   // Single query — all unpaid users older than 25 days
-  const unpaidUsers = await User.find(
-    {
-      status: "active",
-      onboardingCompleted: false,
-      registrationPaymentId: null,
-      createdAt: { $lte: twentyFiveDaysAgo },
-    },
-    {
-      clerkId: 1,
-      _id: 1,
-      username: 1,
-      createdAt: 1,
-      deletionWarningEmailSentAt: 1,
-    },
-  ).lean();
+  const unpaidUsers = (
+    await User.find(
+      {
+        status: "active",
+        onboardingCompleted: false,
+        registrationPaymentId: null,
+        createdAt: { $lte: twentyFiveDaysAgo },
+      },
+      {
+        clerkId: 1,
+        _id: 1,
+        username: 1,
+        paymentCompleted: 1,
+        createdAt: 1,
+        deletionWarningEmailSentAt: 1,
+      },
+    ).lean()
+  ).filter((user) => user.paymentCompleted !== true);
 
   if (unpaidUsers.length === 0) {
     Sentry.captureCheckIn({
@@ -140,7 +143,11 @@ export async function GET(req: NextRequest) {
   if (results.failed.length > 0) {
     reportError(new Error("manage-unpaid-users cron had failures"), {
       tags: { layer: "cron", job: CRON_MONITOR_SLUG },
-      extra: { failed: results.failed, warned: results.warned, deleted: results.deleted },
+      extra: {
+        failed: results.failed,
+        warned: results.warned,
+        deleted: results.deleted,
+      },
     });
   }
 

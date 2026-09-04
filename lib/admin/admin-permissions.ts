@@ -13,6 +13,8 @@ export type AdminPermissionKey =
   | "canCallApplicants"
   | "canProcessRefunds"
   | "canViewPayments"
+  | "canRecoverPayments"
+  | "canManageWhatsAppGroups"
   | "canViewAnalytics"
   | "canExportData"
   | "canManageAdmins"
@@ -45,6 +47,8 @@ export const ADMIN_PERMISSION_CATALOG: Array<{
   { key: "canCallApplicants", label: "Call applicants", explanation: "Contact applicants directly via phone.", group: "support" },
   { key: "canProcessRefunds", label: "Process refunds", explanation: "Initiate and approve refund requests.", group: "finance" },
   { key: "canViewPayments", label: "View payments", explanation: "Access payment records and transaction history.", group: "finance" },
+  { key: "canRecoverPayments", label: "Recover payments", explanation: "Manually mark user payments as complete for recovery.", group: "finance" },
+  { key: "canManageWhatsAppGroups", label: "Manage WhatsApp groups", explanation: "Create, edit, and manage WhatsApp group links for onboarding.", group: "content" },
   { key: "canViewAnalytics", label: "View analytics", explanation: "Access platform analytics and performance metrics.", group: "analytics" },
   { key: "canExportData", label: "Export data", explanation: "Download platform data and reports.", group: "analytics" },
   { key: "canManageAdmins", label: "Manage admins", explanation: "View and manage other administrator accounts.", group: "admin" },

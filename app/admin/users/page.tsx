@@ -23,6 +23,10 @@ import {
   Ban,
   BadgeCheck,
   Trash2,
+  CheckCircle2,
+  XCircle,
+  CreditCard,
+  UserCheck,
 } from "lucide-react";
 import AdminSearchBar from "@/components/admin/ui/AdminSearchBar";
 import { reportClientError } from "@/lib/client-report-error";
@@ -46,6 +50,14 @@ type UserData = {
   status?: "active" | "inactive";
   statusValue: "active" | "blocked" | "deleted";
   onboardingCompleted: boolean;
+  detailsCompleted: boolean;
+  paymentCompleted: boolean;
+  whatsappGroupCompleted: boolean;
+  createdByAdmin: boolean;
+  createdByAdminClerkId: string | null;
+  createdByAdminUsername: string | null;
+  hasTuitionAccess: boolean;
+  hasCandidateAccess: boolean;
   avatarUrl?: string | null;
   lastLogin?: string | null;
   profileUrl: string;
@@ -82,7 +94,16 @@ type ApiUser = {
   role: "teacher" | "teacher_candidate";
   status: "active" | "blocked" | "deleted";
   onboardingCompleted: boolean;
+  detailsCompleted: boolean;
+  paymentCompleted: boolean;
+  whatsappGroupCompleted: boolean;
+  createdByAdmin: boolean;
+  createdByAdminClerkId: string | null;
+  createdByAdminUsername: string | null;
+  hasTuitionAccess: boolean;
+  hasCandidateAccess: boolean;
   avatarUrl: string | null;
+  lastLogin: string | null;
   profileUrl: string;
   verifyUrl: string;
   location: string | null;
@@ -140,6 +161,14 @@ function mapUser(user: ApiUser): UserData {
     statusValue: user.status,
     status: user.status === "active" ? "active" : "inactive",
     onboardingCompleted: user.onboardingCompleted,
+    detailsCompleted: user.detailsCompleted ?? false,
+    paymentCompleted: user.paymentCompleted ?? false,
+    whatsappGroupCompleted: user.whatsappGroupCompleted ?? false,
+    createdByAdmin: user.createdByAdmin ?? false,
+    createdByAdminClerkId: user.createdByAdminClerkId ?? null,
+    createdByAdminUsername: user.createdByAdminUsername ?? null,
+    hasTuitionAccess: user.hasTuitionAccess ?? false,
+    hasCandidateAccess: user.hasCandidateAccess ?? false,
     avatarUrl: user.avatarUrl,
     lastLogin: user.lastLogin,
     profileUrl: user.profileUrl,
@@ -380,6 +409,40 @@ export default function UsersPage() {
     }
   };
 
+  const handleRecoverPayment = async (userId: string) => {
+    setActioningId(userId);
+    try {
+      const res = await fetch(
+        `/api/admin/app-users/${userId}/recover-payment`,
+        { method: "POST" },
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to recover payment");
+      }
+
+      addToast({
+        description: "Payment marked as complete",
+        color: "success",
+      });
+      void loadBundle(false, true);
+    } catch (err) {
+      reportClientError(err, {
+        feature: "admin-users",
+        extra: { action: "recover-payment" },
+      });
+      addToast({
+        description:
+          err instanceof Error ? err.message : "Failed to recover payment",
+        color: "danger",
+      });
+    } finally {
+      setActioningId(null);
+    }
+  };
+
   const tabSummary =
     selectedTab === "teacher"
       ? {
@@ -553,11 +616,66 @@ export default function UsersPage() {
                 <div className="flex items-center gap-2 text-sm">
                   <Globe size={16} className="text-default-400" />
                   <span className="text-default-600">
-                    {user.onboardingCompleted
-                      ? "Onboarding complete"
-                      : "Onboarding pending"}
+                    Onboarding:{" "}
+                    {user.onboardingCompleted ? "Complete" : "Pending"}
                   </span>
                 </div>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <Chip
+                    size="sm"
+                    variant="flat"
+                    color={user.detailsCompleted ? "success" : "default"}
+                    startContent={
+                      user.detailsCompleted ? (
+                        <CheckCircle2 size={13} />
+                      ) : (
+                        <XCircle size={13} />
+                      )
+                    }
+                  >
+                    Details {user.detailsCompleted ? "complete" : "pending"}
+                  </Chip>
+                  <Chip
+                    size="sm"
+                    variant="flat"
+                    color={user.paymentCompleted ? "success" : "warning"}
+                    startContent={
+                      user.paymentCompleted ? (
+                        <CheckCircle2 size={13} />
+                      ) : (
+                        <XCircle size={13} />
+                      )
+                    }
+                  >
+                    Payment {user.paymentCompleted ? "complete" : "pending"}
+                  </Chip>
+                  <Chip
+                    size="sm"
+                    variant="flat"
+                    color={user.whatsappGroupCompleted ? "success" : "default"}
+                    startContent={
+                      user.whatsappGroupCompleted ? (
+                        <CheckCircle2 size={13} />
+                      ) : (
+                        <XCircle size={13} />
+                      )
+                    }
+                  >
+                    WhatsApp{" "}
+                    {user.whatsappGroupCompleted ? "joined" : "pending"}
+                  </Chip>
+                </div>
+                {user.createdByAdmin && (
+                  <div className="flex items-center gap-2 text-sm text-default-500">
+                    <UserCheck size={16} className="text-default-400" />
+                    <span>
+                      Created by admin
+                      {user.createdByAdminUsername
+                        ? `: ${user.createdByAdminUsername}`
+                        : ""}
+                    </span>
+                  </div>
+                )}
               </CardBody>
               <CardFooter className="gap-2">
                 <Button
@@ -627,6 +745,23 @@ export default function UsersPage() {
                     }}
                   >
                     Delete
+                  </Button>
+                ) : null}
+
+                {!user.paymentCompleted && user.statusValue !== "deleted" ? (
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="primary"
+                    startContent={<CreditCard size={16} />}
+                    isLoading={actioningId === user.id}
+                    onPress={() => {
+                      if (window.confirm(`Recover payment for ${user.name}?`)) {
+                        void handleRecoverPayment(user.id);
+                      }
+                    }}
+                  >
+                    Recover payment
                   </Button>
                 ) : null}
               </CardFooter>

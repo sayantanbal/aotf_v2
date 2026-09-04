@@ -68,11 +68,11 @@ const { MONGODB_URI_LEGACY, MONGODB_URI, CLERK_SECRET_KEY } = process.env;
 
 if (!MONGODB_URI_LEGACY)
   throw new Error(
-    "Missing MONGODB_URI_LEGACY in env. This must point to the OLD production cluster."
+    "Missing MONGODB_URI_LEGACY in env. This must point to the OLD production cluster.",
   );
 if (!MONGODB_URI)
   throw new Error(
-    "Missing MONGODB_URI in env. This must point to the NEW app database."
+    "Missing MONGODB_URI in env. This must point to the NEW app database.",
   );
 if (!CLERK_SECRET_KEY) throw new Error("Missing CLERK_SECRET_KEY in env");
 
@@ -132,11 +132,15 @@ function makeUsername(email, suffix = 0) {
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 async function migrate() {
-  console.log("\n╔════════════════════════════════════════════════════════════╗");
   console.log(
-    `║  AOTF Freelancers → Clerk Migration  [${IS_LIVE ? "LIVE 🔴" : "DRY RUN 🟡"}]        ║`
+    "\n╔════════════════════════════════════════════════════════════╗",
   );
-  console.log("╚════════════════════════════════════════════════════════════╝\n");
+  console.log(
+    `║  AOTF Freelancers → Clerk Migration  [${IS_LIVE ? "LIVE 🔴" : "DRY RUN 🟡"}]        ║`,
+  );
+  console.log(
+    "╚════════════════════════════════════════════════════════════╝\n",
+  );
 
   if (!IS_LIVE) {
     console.log("ℹ️  DRY RUN — no Clerk users will be created.");
@@ -192,7 +196,7 @@ async function migrate() {
     if (!email) {
       log(
         "⚠️ ",
-        `Skipping freelancer with no email (legacyId: ${legacyId ?? "unknown"})`
+        `Skipping freelancer with no email (legacyId: ${legacyId ?? "unknown"})`,
       );
       results.skipped++;
       continue;
@@ -205,7 +209,7 @@ async function migrate() {
     if (!IS_LIVE) {
       log(
         "🔍",
-        `[DRY RUN] ${email} | "${firstName} ${lastName}" | role: teacher_candidate | legacyId: ${legacyId ?? "n/a"}`
+        `[DRY RUN] ${email} | "${firstName} ${lastName}" | role: teacher_candidate | legacyId: ${legacyId ?? "n/a"}`,
       );
       results.created++;
       continue;
@@ -244,7 +248,6 @@ async function migrate() {
               lastName,
               skipPasswordChecks: true,
               skipPasswordRequirement: true,
-              skipLegalChecks: true,
               legalAcceptedAt: legacyLegalAcceptedAt(freelancer),
               publicMetadata: metadata,
             });
@@ -252,7 +255,7 @@ async function migrate() {
           } catch (innerErr) {
             const isUsernameConflict =
               innerErr?.errors?.some(
-                (e) => e.code === "form_identifier_exists"
+                (e) => e.code === "form_identifier_exists",
               ) ?? false;
             if (!isUsernameConflict || attempt === 9) throw innerErr;
           }
@@ -260,7 +263,7 @@ async function migrate() {
 
         log(
           "✅",
-          `Created: ${email} (teacher_candidate) | legacyId: ${legacyId ?? "n/a"}`
+          `Created: ${email} (teacher_candidate) | legacyId: ${legacyId ?? "n/a"}`,
         );
         results.created++;
       }
@@ -268,10 +271,7 @@ async function migrate() {
       const seedResult = await seedClerkUserInMongo(newDb, clerkUser);
       if (seedResult.action !== "skipped") {
         results.seeded++;
-        log(
-          "🗄️ ",
-          `MongoDB ${seedResult.action}: ${email} (${clerkUser.id})`
-        );
+        log("🗄️ ", `MongoDB ${seedResult.action}: ${email} (${clerkUser.id})`);
       }
 
       await sleep(CLERK_RATE_LIMIT_DELAY_MS);
@@ -290,23 +290,27 @@ async function migrate() {
 
   // ── Summary ────────────────────────────────────────────────────────────────
 
-  console.log("\n╔════════════════════════════════════════════════════════════╗");
+  console.log(
+    "\n╔════════════════════════════════════════════════════════════╗",
+  );
   console.log("║                         SUMMARY                           ║");
   console.log("╚════════════════════════════════════════════════════════════╝");
   console.log(
-    `  ✅  ${IS_LIVE ? "Created     " : "Would create"} : ${results.created}`
+    `  ✅  ${IS_LIVE ? "Created     " : "Would create"} : ${results.created}`,
   );
   console.log(
-    `  🗄️   ${IS_LIVE ? "Mongo seeded" : "Would seed  "} : ${results.seeded}`
+    `  🗄️   ${IS_LIVE ? "Mongo seeded" : "Would seed  "} : ${results.seeded}`,
   );
   console.log(`  ⏭️   Skipped      : ${results.skipped}`);
   console.log(`  ❌  Failed       : ${results.failed}`);
 
   if (failures.length > 0) {
-    console.log("\n── Failures ──────────────────────────────────────────────────");
+    console.log(
+      "\n── Failures ──────────────────────────────────────────────────",
+    );
     for (const f of failures) {
       console.log(
-        `  • [teacher_candidate] ${f.email} (legacyId: ${f.legacyId})`
+        `  • [teacher_candidate] ${f.email} (legacyId: ${f.legacyId})`,
       );
       console.log(`    └─ ${f.error}`);
     }
@@ -314,7 +318,7 @@ async function migrate() {
 
   if (!IS_LIVE) {
     console.log(
-      "\n💡 Happy with the output? Run the live migration:\n   node migrate-freelancers-to-clerk.mjs --live\n"
+      "\n💡 Happy with the output? Run the live migration:\n   node migrate-freelancers-to-clerk.mjs --live\n",
     );
   } else {
     console.log("\n🎉 Freelancer migration complete.\n");

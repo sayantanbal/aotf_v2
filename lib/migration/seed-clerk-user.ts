@@ -46,7 +46,14 @@ function deriveUsername(clerkUser: ClerkUserSeedInput): string {
 /** Mirrors the Clerk user.created webhook — upserts User, Profile, OnboardingDetails. */
 export async function seedClerkUserInMongo(
   clerkUser: ClerkUserSeedInput,
-  options?: { phone?: string | null; whatsapp?: string | null },
+  options?: {
+    phone?: string | null;
+    whatsapp?: string | null;
+    createdByAdminClerkId?: string | null;
+    createdByAdmin?: boolean;
+    paymentCompleted?: boolean;
+    useTransaction?: boolean;
+  },
 ): Promise<SeedResult> {
   const metadata = clerkUser.publicMetadata ?? {};
 
@@ -73,117 +80,135 @@ export async function seedClerkUserInMongo(
   const accountHolderName = clerkUser.fullName?.trim() || null;
   const avatarUrl = clerkUser.imageUrl || null;
 
-  const session = await mongoose.startSession();
   let action: SeedResult["action"] = "updated";
 
-  try {
-    await session.withTransaction(async () => {
-      let userDoc = await User.findOneAndUpdate(
-        { $or: [{ clerkId }, { username }] },
-        { $set: { clerkId, status: "active" } },
-        { returnDocument: "after", session },
-      );
+  const persist = async (session?: mongoose.ClientSession) => {
+    const writeOptions = session ? { session } : {};
+    let userDoc = await User.findOneAndUpdate(
+      { $or: [{ clerkId }, { username }] },
+      { $set: { clerkId, status: "active" } },
+      { returnDocument: "after", ...writeOptions },
+    );
 
-      if (!userDoc) {
-        const created = await User.create(
-          [
-            {
-              clerkId,
-              username,
-              role,
-              plan: {
-                current: planCurrent,
-                hasTuitionAccess: false,
-                hasCandidateAccess: false,
-                activatedAt: null,
-              },
-              onboardingCompleted: metadata.onboardingCompleted === true,
-              status: "active",
-              registrationPaymentId: null,
-            },
-          ],
-          { session },
-        );
-        userDoc = created[0];
-        action = "created";
-      }
-
-      const existingProfile = await Profile.findOneAndUpdate(
-        { $or: [{ clerkId }, { username }] },
-        { $set: { clerkId, userId: userDoc._id } },
-        { returnDocument: "after", session },
-      );
-
-      if (!existingProfile) {
-        await Profile.create(
-          [
-            {
-              userId: userDoc._id,
-              clerkId,
-              username,
-              displayName: accountHolderName,
-              bio: null,
-              avatarUrl,
-              location: null,
-              websiteUrl: null,
-              socialLinks: {},
-              subjects: [],
-              experience: null,
-              isPublic: true,
-              phone: options?.phone ?? null,
-              whatsapp: options?.whatsapp ?? options?.phone ?? null,
-            },
-          ],
-          { session },
-        );
-      } else {
-        const profileUpdate: Record<string, unknown> = {};
-        if (avatarUrl) profileUpdate.avatarUrl = avatarUrl;
-        if (!existingProfile.displayName && accountHolderName) {
-          profileUpdate.displayName = accountHolderName;
-        }
-        if (options?.phone) {
-          profileUpdate.phone = options.phone;
-          profileUpdate.whatsapp = options.whatsapp ?? options.phone;
-        }
-        if (Object.keys(profileUpdate).length > 0) {
-          await Profile.updateOne(
-            { _id: existingProfile._id },
-            { $set: profileUpdate },
-            { session },
-          );
-        }
-      }
-
-      const isMigratedLegacy =
-        metadata.migratedFromLegacy === true &&
-        metadata.registrationFeeStatus === "paid";
-
-      if (isMigratedLegacy) {
-        await OnboardingDetails.findOneAndUpdate(
-          { clerkId },
+    if (!userDoc) {
+      const paymentComplete =
+        options?.paymentCompleted ?? metadata.paymentCompleted === true;
+      const created = await User.create(
+        [
           {
-            $setOnInsert: {
-              userId: userDoc._id,
-              clerkId,
-              phone: null,
-              whatsapp: null,
-              address: null,
-              teachingExp: null,
-              jobExp: null,
-              qualification: null,
-              board: null,
-              plan: legacyPlan ?? planCurrent,
-              status: "incomplete",
-              expiresAt: null,
+            clerkId,
+            username,
+            role,
+            createdByAdmin: !!options?.createdByAdmin,
+            createdByAdminClerkId: options?.createdByAdminClerkId ?? null,
+            detailsCompleted: metadata.detailsCompleted === true,
+            paymentCompleted: paymentComplete,
+            whatsappGroupCompleted: metadata.whatsappGroupCompleted === true,
+            plan: {
+              current: planCurrent,
+              hasTuitionAccess: true,
+              hasCandidateAccess: planCurrent === "teacher_candidate",
+              activatedAt: null,
             },
+            onboardingCompleted:
+              metadata.onboardingCompleted === true ||
+              (metadata.detailsCompleted === true &&
+                paymentComplete &&
+                metadata.whatsappGroupCompleted === true),
+            status: "active",
+            registrationPaymentId: null,
           },
-          { upsert: true, session },
+        ],
+        writeOptions,
+      );
+      userDoc = created[0];
+      action = "created";
+    }
+
+    const existingProfile = await Profile.findOneAndUpdate(
+      { $or: [{ clerkId }, { username }] },
+      { $set: { clerkId, userId: userDoc._id } },
+      { returnDocument: "after", ...writeOptions },
+    );
+
+    if (!existingProfile) {
+      await Profile.create(
+        [
+          {
+            userId: userDoc._id,
+            clerkId,
+            username,
+            displayName: accountHolderName,
+            bio: null,
+            avatarUrl,
+            location: null,
+            websiteUrl: null,
+            socialLinks: {},
+            subjects: [],
+            experience: null,
+            isPublic: true,
+            phone: options?.phone ?? null,
+            whatsapp: options?.whatsapp ?? options?.phone ?? null,
+          },
+        ],
+        writeOptions,
+      );
+    } else {
+      const profileUpdate: Record<string, unknown> = {};
+      if (avatarUrl) profileUpdate.avatarUrl = avatarUrl;
+      if (!existingProfile.displayName && accountHolderName) {
+        profileUpdate.displayName = accountHolderName;
+      }
+      if (options?.phone) {
+        profileUpdate.phone = options.phone;
+        profileUpdate.whatsapp = options.whatsapp ?? options.phone;
+      }
+      if (Object.keys(profileUpdate).length > 0) {
+        await Profile.updateOne(
+          { _id: existingProfile._id },
+          { $set: profileUpdate },
+          writeOptions,
         );
       }
-    });
-  } finally {
-    await session.endSession();
+    }
+
+    const isMigratedLegacy =
+      metadata.migratedFromLegacy === true &&
+      metadata.registrationFeeStatus === "paid";
+
+    if (isMigratedLegacy) {
+      await OnboardingDetails.findOneAndUpdate(
+        { clerkId },
+        {
+          $setOnInsert: {
+            userId: userDoc._id,
+            clerkId,
+            phone: null,
+            whatsapp: null,
+            address: null,
+            teachingExp: null,
+            jobExp: null,
+            qualification: null,
+            board: null,
+            plan: legacyPlan ?? planCurrent,
+            status: "incomplete",
+            expiresAt: null,
+          },
+        },
+        { upsert: true, ...writeOptions },
+      );
+    }
+  };
+
+  if (options?.useTransaction === false) {
+    await persist();
+  } else {
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(() => persist(session));
+    } finally {
+      await session.endSession();
+    }
   }
 
   return { action };

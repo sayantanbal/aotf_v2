@@ -19,7 +19,15 @@ import type {
   OnboardingFormData,
   PlanValue,
 } from "@/components/reactbits/onboarding/index";
-import { Sen } from "next/font/google";
+
+// ─── WhatsApp link type ───────────────────────────────────────────────────────
+type WhatsAppGroup = {
+  _id: string;
+  label: string;
+  url: string;
+  capacity: number;
+  memberCount: number;
+};
 
 function loadRazorpayScript(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -43,8 +51,6 @@ export default function Onboarding() {
   const { session } = useSession();
 
   // ── Legacy-migration detection ─────────────────────────────────────────────
-  // Users migrated from the old backend have these flags in Clerk publicMetadata.
-  // They skip Razorpay and activate directly via /api/v1/payments/activate-legacy.
   const publicMeta = (user?.publicMetadata ?? {}) as Record<string, unknown>;
   const isLegacyMigrated =
     publicMeta.migratedFromLegacy === true &&
@@ -64,24 +70,48 @@ export default function Onboarding() {
     plan: "",
   });
 
-  // Tracks which "outer" step the stepper is currently on so we can
-  // conditionally hide the footer Complete button on step 3.
+  // Tracks which outer step the stepper is on
   const [currentStep, setCurrentStep] = useState(1);
+  // Initial step to resume at (computed from server flags)
+  const [initialStep, setInitialStep] = useState(1);
+  const [stepperReady, setStepperReady] = useState(false);
+  const [onboardingFlags, setOnboardingFlags] = useState({
+    detailsCompleted: false,
+    paymentCompleted: false,
+    whatsappGroupCompleted: false,
+    createdByAdmin: false,
+  });
 
-  // Auto-deletion countdown (computed as createdAt + 30 days)
+  // Auto-deletion countdown
   const [deletionDeadline, setDeletionDeadline] = useState<Date | null>(null);
   const [countdown, setCountdown] = useState("");
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Pre-fill form from DB on mount
+  // WhatsApp step state
+  const [whatsappGroups, setWhatsappGroups] = useState<WhatsAppGroup[]>([]);
+  const [whatsappGroupsLoading, setWhatsappGroupsLoading] = useState(false);
+  const [whatsappGroupsError, setWhatsappGroupsError] = useState<string | null>(
+    null,
+  );
+  const [whatsappCompleting, setWhatsappCompleting] = useState<string | null>(
+    null,
+  );
+  const [whatsappDone, setWhatsappDone] = useState(false);
+
+  // Pre-fill form from DB on mount; also determine initial step
   useEffect(() => {
-    const meta = (user as any)?.publicMetadata as Record<string, unknown> | undefined;
+    const meta = (user as any)?.publicMetadata as
+      | Record<string, unknown>
+      | undefined;
     const isAdmin =
       meta?.isAdmin === true ||
       meta?.role === "super_admin" ||
       meta?.aotfRole === "SUPER_ADMIN";
 
-    if (isAdmin) return; // Admins don't need onboarding — avoid repeated calls
+    if (isAdmin) {
+      setStepperReady(true);
+      return;
+    }
 
     fetch("/api/v1/onboarding")
       .then((r) => (r.ok ? r.json() : null))
@@ -91,12 +121,38 @@ export default function Onboarding() {
             onboardingDetails?: Record<string, string | null>;
             createdAt?: string | null;
             onboardingCompleted?: boolean;
+            detailsCompleted?: boolean;
+            paymentCompleted?: boolean;
+            whatsappGroupCompleted?: boolean;
             paymentPaidButNotOnboarded?: boolean;
-          } | null
+            createdByAdmin?: boolean;
+          } | null,
         ) => {
-          // If the user already paid but onboardingCompleted is false, show contact admin
           if (data?.paymentPaidButNotOnboarded) {
             setPaymentPaidButNotOnboarded(true);
+          }
+
+          const flags = {
+            detailsCompleted: data?.detailsCompleted ?? false,
+            paymentCompleted: data?.paymentCompleted ?? false,
+            whatsappGroupCompleted: data?.whatsappGroupCompleted ?? false,
+            createdByAdmin: data?.createdByAdmin ?? false,
+          };
+          setOnboardingFlags(flags);
+
+          // Step 1 and 2 are both covered by detailsCompleted.
+          const nextStep = !flags.detailsCompleted
+            ? 1
+            : !flags.paymentCompleted
+              ? 3
+              : !flags.whatsappGroupCompleted
+                ? 4
+                : 5;
+          setInitialStep(nextStep);
+          setCurrentStep(nextStep);
+
+          if (data?.whatsappGroupCompleted) {
+            setWhatsappDone(true);
           }
 
           const d = data?.onboardingDetails;
@@ -120,19 +176,45 @@ export default function Onboarding() {
             setProfileSaved(true);
             if (d.plan) setOnboardingDetailsSaved(true);
           }
-          if (data?.createdAt) {
+          if (data?.createdAt && !flags.paymentCompleted) {
             const deadline = new Date(
-              new Date(data.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000
+              new Date(data.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000,
             );
             setDeletionDeadline(deadline);
           }
-        }
+        },
       )
       .catch(() => {
         /* silently ignore — form stays empty */
+      })
+      .finally(() => {
+        setStepperReady(true);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load WhatsApp groups when reaching step 4
+  useEffect(() => {
+    if (currentStep !== 4 || whatsappGroups.length > 0 || whatsappGroupsLoading)
+      return;
+    setWhatsappGroupsLoading(true);
+    setWhatsappGroupsError(null);
+    fetch("/api/v1/onboarding/whatsapp")
+      .then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error("Failed to load groups")),
+      )
+      .then((data: { groups: WhatsAppGroup[] }) => {
+        setWhatsappGroups(data.groups ?? []);
+      })
+      .catch((err) => {
+        setWhatsappGroupsError(
+          err instanceof Error ? err.message : "Failed to load groups",
+        );
+      })
+      .finally(() => {
+        setWhatsappGroupsLoading(false);
+      });
+  }, [currentStep, whatsappGroups.length, whatsappGroupsLoading]);
 
   // Live countdown ticker
   useEffect(() => {
@@ -149,7 +231,7 @@ export default function Onboarding() {
       const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const secs = Math.floor((diff % (1000 * 60)) / 1000);
       setCountdown(
-        `${days}d ${hrs.toString().padStart(2, "0")}h ${mins.toString().padStart(2, "0")}m ${secs.toString().padStart(2, "0")}s`
+        `${days}d ${hrs.toString().padStart(2, "0")}h ${mins.toString().padStart(2, "0")}m ${secs.toString().padStart(2, "0")}s`,
       );
     };
     tick();
@@ -159,30 +241,31 @@ export default function Onboarding() {
     };
   }, [deletionDeadline]);
 
-  // Profile save state (fires on transition from step 1 → step 2)
+  // Profile save state
   const [profileSaved, setProfileSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Onboarding details save state (fires on plan selection; gates step 2 → 3)
+  // Onboarding details save state
   const [onboardingDetailsSaved, setOnboardingDetailsSaved] = useState(false);
   const [isSavingOnboarding, setIsSavingOnboarding] = useState(false);
   const [onboardingDetailsError, setOnboardingDetailsError] = useState<
     string | null
   >(null);
+
   // Payment state
   const [isPaymentLoading, setIsPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  // Mismatch state: payment is "paid" but onboardingCompleted is still false
+  // Mismatch state
   const [paymentPaidButNotOnboarded, setPaymentPaidButNotOnboarded] =
     useState(false);
 
-  // ─── Helpers ──────────────────────────────────────────────────────
+  // ─── Handlers ─────────────────────────────────────────────────────
 
   const handleChange = (
     key: keyof OnboardingFormData,
-    value: string | boolean
+    value: string | boolean,
   ) => {
     setFormData((prev) => {
       const next: OnboardingFormData = {
@@ -194,7 +277,6 @@ export default function Onboarding() {
       };
       return next;
     });
-    // If any step-1 field changes, mark profile and onboarding as needing re-save
     const step1Fields: (keyof OnboardingFormData)[] = [
       "phone",
       "whatsapp",
@@ -210,24 +292,22 @@ export default function Onboarding() {
       setProfileSaved(false);
       setOnboardingDetailsSaved(false);
     }
-    // When a plan is selected, immediately sync to onboardingDetails
     if (key === "plan" && typeof value === "string" && value) {
       setOnboardingDetailsSaved(false);
       saveOnboardingDetails(value);
     }
   };
 
-  // ─── Profile save ─────────────────────────────────────────────────
-
   const saveProfile = async () => {
     setIsSaving(true);
     setSaveError(null);
-    const meta = (user as any)?.publicMetadata as Record<string, unknown> | undefined;
+    const meta = (user as any)?.publicMetadata as
+      | Record<string, unknown>
+      | undefined;
     const isAdmin =
       meta?.isAdmin === true ||
       meta?.role === "super_admin" ||
       meta?.aotfRole === "SUPER_ADMIN";
-
     if (isAdmin) {
       setIsSaving(false);
       setProfileSaved(true);
@@ -248,44 +328,40 @@ export default function Onboarding() {
           gender: formData.gender,
         }),
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        const msg =
+        throw new Error(
           (data as { error?: string }).error ??
-          (res.status === 404
-            ? "Your account is still being set up. Please wait a moment and try again."
-            : "Failed to save details. Please try again.");
-        throw new Error(msg);
+            (res.status === 404
+              ? "Your account is still being set up. Please wait a moment and try again."
+              : "Failed to save details. Please try again."),
+        );
       }
-
       setProfileSaved(true);
     } catch (err) {
       setSaveError(
-        err instanceof Error ? err.message : "Failed to save your details."
+        err instanceof Error ? err.message : "Failed to save your details.",
       );
     } finally {
       setIsSaving(false);
     }
   };
 
-  // ─── Onboarding details save ──────────────────────────────────────
-
   const saveOnboardingDetails = async (planOverride?: string) => {
     setIsSavingOnboarding(true);
     setOnboardingDetailsError(null);
-    const meta = (user as any)?.publicMetadata as Record<string, unknown> | undefined;
+    const meta = (user as any)?.publicMetadata as
+      | Record<string, unknown>
+      | undefined;
     const isAdmin =
       meta?.isAdmin === true ||
       meta?.role === "super_admin" ||
       meta?.aotfRole === "SUPER_ADMIN";
-
     if (isAdmin) {
       setIsSavingOnboarding(false);
       setOnboardingDetailsSaved(true);
       return;
     }
-    // Use the explicit override first, then fall back to current state
     const planValue =
       planOverride !== undefined ? planOverride : formData.plan || undefined;
     try {
@@ -304,46 +380,44 @@ export default function Onboarding() {
           ...(planValue ? { plan: planValue } : {}),
         }),
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        const msg =
+        throw new Error(
           (data as { error?: string }).error ??
-          (res.status === 404
-            ? "Your account is still being set up. Please wait a moment and try again."
-            : "Failed to save details. Please try again.");
-        throw new Error(msg);
+            (res.status === 404
+              ? "Your account is still being set up. Please wait a moment and try again."
+              : "Failed to save details. Please try again."),
+        );
       }
-
-      // Mark as saved — step-1 fields are now in sync; plan inclusion is separate
+      const savedData = (await res.json()) as {
+        detailsCompleted?: boolean;
+        paymentCompleted?: boolean;
+        whatsappGroupCompleted?: boolean;
+      };
       setOnboardingDetailsSaved(true);
+      setOnboardingFlags((prev) => ({
+        ...prev,
+        detailsCompleted: savedData.detailsCompleted ?? prev.detailsCompleted,
+        paymentCompleted: savedData.paymentCompleted ?? prev.paymentCompleted,
+        whatsappGroupCompleted:
+          savedData.whatsappGroupCompleted ?? prev.whatsappGroupCompleted,
+      }));
     } catch (err) {
       setOnboardingDetailsError(
-        err instanceof Error ? err.message : "Failed to save your details."
+        err instanceof Error ? err.message : "Failed to save your details.",
       );
     } finally {
       setIsSavingOnboarding(false);
     }
   };
 
-  // ─── Stepper callbacks ────────────────────────────────────────────
-  // Fires after Stepper already moved to `step`
   const handleStepChange = (step: number) => {
     setCurrentStep(step);
-    // Save step-1 data when arriving at step 2 or 3 — only if something changed
-    if ((step === 2 || step === 3) && !profileSaved && !isSaving) {
-      saveProfile();
-    }
-    // Sync step-1 fields to onboardingDetails when arriving at step 2 or 3
-    if (
-      (step === 2 || step === 3) &&
-      !onboardingDetailsSaved &&
-      !isSavingOnboarding
-    ) {
+    if (step !== 1 && !profileSaved && !isSaving) saveProfile();
+    if (step !== 1 && !onboardingDetailsSaved && !isSavingOnboarding)
       saveOnboardingDetails(formData.plan || undefined);
-    }
   };
-  // Sync validation used by Stepper to gate the Next/Complete button
+
   const validateStep = (step: number): boolean => {
     if (step === 1) {
       const result = onboardingStep1Schema.safeParse({
@@ -359,17 +433,15 @@ export default function Onboarding() {
       return result.success;
     }
     if (step === 2) {
-      // Must have a plan selected. Profile and onboarding saves are async,
-      // so also allow through if the saves are still in-flight (they'll
-      // complete before the user can pay on step 3).
       return (
         !!formData.plan &&
         (profileSaved || isSaving) &&
         (onboardingDetailsSaved || isSavingOnboarding)
       );
     }
-    // Step 3: block the Stepper's "Complete" button — payment is handled by
-    // the custom Pay button inside the step content.
+    // Step 3: block "Complete" — payment is the gate
+    if (step === 3) return false;
+    // Step 4: whatsapp step — allow Next only after done (but we hide Next anyway)
     return false;
   };
 
@@ -381,72 +453,55 @@ export default function Onboarding() {
     }
     if (!user) {
       setPaymentError(
-        "Session expired. Please refresh the page and try again."
+        "Session expired. Please refresh the page and try again.",
       );
       return;
     }
-
     setIsPaymentLoading(true);
     setPaymentError(null);
-
     try {
-      // 1. Create order (or detect legacy-migration short-circuit)
       const orderRes = await fetch("/api/v1/payments/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan: formData.plan }),
       });
-
       if (!orderRes.ok) {
         const d = await orderRes.json().catch(() => ({}));
         throw new Error(
-          (d as { error?: string }).error ?? "Failed to create order"
+          (d as { error?: string }).error ?? "Failed to create order",
         );
       }
-
       const orderData = (await orderRes.json()) as
         | { alreadyPaid: true }
         | { orderId: string; amount: number; currency: string; key: string };
 
-      // ── Legacy-migration path ──────────────────────────────────────
-      // create-order returns { alreadyPaid: true } for users who already
-      // paid in the old system. Call activate-legacy to complete setup.
       if ("alreadyPaid" in orderData && orderData.alreadyPaid) {
         const activateRes = await fetch("/api/v1/payments/activate-legacy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ plan: formData.plan }),
         });
-
         if (!activateRes.ok) {
           const d = await activateRes.json().catch(() => ({}));
           throw new Error(
-            (d as { error?: string }).error ?? "Account activation failed"
+            (d as { error?: string }).error ?? "Account activation failed",
           );
         }
-
-        // Refresh Clerk session so JWT carries updated onboardingCompleted
         await user.reload();
         await session?.reload();
-
-        // Hard redirect so the proxy sees the fresh JWT
-        window.location.href = `/u/${user.username}`;
+        // After payment, proceed to WhatsApp step instead of redirecting
+        setOnboardingFlags((prev) => ({ ...prev, paymentCompleted: true }));
+        setCurrentStep(4);
         return;
       }
-      // ─────────────────────────────────────────────────────────────────
 
-      // ── Normal Razorpay path ───────────────────────────────────────
       const { orderId, amount, currency, key } = orderData as {
         orderId: string;
         amount: number;
         currency: string;
         key: string;
       };
-
-      // 2. Load Razorpay SDK
       await loadRazorpayScript();
-
-      // 3. Open Razorpay checkout and await result
       const selectedPlan = PLANS.find((p) => p.value === formData.plan)!;
 
       await new Promise<void>((resolve, reject) => {
@@ -463,7 +518,6 @@ export default function Onboarding() {
             razorpay_signature: string;
           }) => {
             try {
-              // 4. Verify payment server-side
               const verifyRes = await fetch("/api/v1/payments/verify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -474,36 +528,29 @@ export default function Onboarding() {
                   toPlan: formData.plan,
                 }),
               });
-
               if (!verifyRes.ok) {
                 const d = await verifyRes.json().catch(() => ({}));
                 throw new Error(
                   (d as { error?: string }).error ??
-                    "Payment verification failed"
+                    "Payment verification failed",
                 );
               }
-
-              // 5. Refresh Clerk session so JWT carries updated onboardingCompleted
               await user.reload();
-
-              // Force the session JWT to regenerate with new publicMetadata
               await session?.reload();
-
-              // 6. Hard redirect so the proxy sees the fresh JWT
-              window.location.href = `/u/${user.username}`;
+              // Move to WhatsApp step instead of redirecting
+              setOnboardingFlags((prev) => ({
+                ...prev,
+                paymentCompleted: true,
+              }));
+              setCurrentStep(4);
               resolve();
             } catch (err) {
               reject(err);
             }
           },
-          prefill: {
-            contact: formData.phone,
-          },
-          modal: {
-            ondismiss: () => reject(new Error("Payment cancelled")),
-          },
+          prefill: { contact: formData.phone },
+          modal: { ondismiss: () => reject(new Error("Payment cancelled")) },
         };
-
         const RazorpayClass = (
           window as unknown as {
             Razorpay: new (opts: unknown) => { open: () => void };
@@ -512,13 +559,11 @@ export default function Onboarding() {
         new RazorpayClass(options).open();
       });
     } catch (err) {
-      if (err instanceof Error && err.message === "Payment cancelled") {
-        // User closed the modal — not an error, just re-enable the button
-      } else {
+      if (!(err instanceof Error && err.message === "Payment cancelled")) {
         setPaymentError(
           err instanceof Error
             ? err.message
-            : "Payment failed. Please try again."
+            : "Payment failed. Please try again.",
         );
         reportClientError(err, {
           feature: "onboarding",
@@ -530,9 +575,63 @@ export default function Onboarding() {
     }
   };
 
-  // ─── Derived ──────────────────────────────────────────────────────
+  // ─── WhatsApp group join ────────────────────────────────────────────
+  const handleJoinGroup = async (group: WhatsAppGroup) => {
+    setWhatsappCompleting(group._id);
+    try {
+      // Open the group link first
+      window.open(group.url, "_blank", "noopener,noreferrer");
+
+      // Mark completion server-side
+      const res = await fetch("/api/v1/onboarding/whatsapp", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(
+          (d as { error?: string }).error ?? "Failed to mark WhatsApp step",
+        );
+      }
+
+      setWhatsappDone(true);
+      setOnboardingFlags((prev) => ({ ...prev, whatsappGroupCompleted: true }));
+
+      // Reload session then redirect to profile
+      if (user) {
+        await user.reload();
+        await session?.reload();
+        window.location.href = `/u/${user.username}`;
+      }
+    } catch (err) {
+      reportClientError(err, {
+        feature: "onboarding",
+        extra: { step: "whatsapp" },
+      });
+      // Non-blocking — user can still navigate away
+    } finally {
+      setWhatsappCompleting(null);
+    }
+  };
 
   const selectedPlan = PLANS.find((p) => p.value === formData.plan);
+  const isStepAvailable = (step: number) =>
+    step === 1
+      ? !onboardingFlags.detailsCompleted
+      : step === 2
+        ? !onboardingFlags.detailsCompleted && !onboardingFlags.paymentCompleted
+        : step === 3
+          ? !onboardingFlags.paymentCompleted
+          : !onboardingFlags.whatsappGroupCompleted;
+
+  // Don't render Stepper until we know the resume step
+  if (!stepperReady) {
+    return (
+      <section className="flex flex-col items-center justify-center px-4 py-16">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </section>
+    );
+  }
+
   return (
     <section className="flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-md mx-auto">
@@ -576,7 +675,7 @@ export default function Onboarding() {
         {/* ── Normal onboarding flow ─────────────────────────────── */}
         {!paymentPaidButNotOnboarded && (
           <>
-            {/* ── Auto-deletion warning ──────────────────────────────── */}
+            {/* ── Auto-deletion warning ────────────────────────── */}
             {deletionDeadline && countdown && (
               <div className="mb-2 p-4 rounded-xl bg-warning-50 border border-warning-300 text-warning-800 text-sm space-y-1">
                 <p className="font-semibold">
@@ -589,16 +688,32 @@ export default function Onboarding() {
                 <p className="font-mono font-bold tracking-wide">{countdown}</p>
               </div>
             )}
+            {onboardingFlags.createdByAdmin &&
+              onboardingFlags.paymentCompleted && (
+                <div className="mb-4 rounded-xl border border-success-200 bg-success-50 p-4 text-center text-sm text-success-700">
+                  <p className="font-semibold">
+                    Your payment has already been collected.
+                  </p>
+                  <p>
+                    You do not need to pay again. Complete the remaining
+                    onboarding steps below.
+                  </p>
+                </div>
+              )}
             <Stepper
               className="mb-10"
+              initialStep={initialStep}
+              isStepAvailable={isStepAvailable}
               onStepChange={handleStepChange}
               validateStep={validateStep}
               checkStep={validateStep}
               nextButtonProps={
-                currentStep === 3 ? { style: { display: "none" } } : {}
+                currentStep === 3 || currentStep === 4
+                  ? { style: { display: "none" } }
+                  : {}
               }
             >
-              {/* ── STEP 1: Personal & Professional Details ────────────── */}
+              {/* ── STEP 1: Personal & Professional Details ─── */}
               <Step>
                 <div className="space-y-3">
                   <PhoneFields
@@ -607,42 +722,37 @@ export default function Onboarding() {
                     sameAsPhone={formData.sameAsPhone}
                     onChange={handleChange}
                   />
-
                   <AddressField
                     value={formData.address}
                     onChange={(v) => handleChange("address", v)}
                   />
-
                   <ExperienceField
                     label="Teaching Experience"
                     value={formData.teachingExp}
                     isRequired
                     onChange={(v) => handleChange("teachingExp", v)}
                   />
-
                   <ExperienceField
                     label="Job Experience (optional)"
                     value={formData.jobExp}
                     onChange={(v) => handleChange("jobExp", v)}
                   />
-
                   <QualificationField
                     value={formData.qualification}
                     onChange={(v) => handleChange("qualification", v)}
                   />
-
                   <BoardField
                     value={formData.board}
                     onChange={(v) => handleChange("board", v)}
                   />
-                  
                   <GenderField
                     value={formData.gender}
                     onChange={(v) => handleChange("gender", v)}
                   />
                 </div>
               </Step>
-              {/* ── STEP 2: Plan Selection ─────────────────────────────── */}
+
+              {/* ── STEP 2: Plan Selection ─────────────────────── */}
               <Step>
                 <PlanSelection
                   selectedPlan={formData.plan}
@@ -657,7 +767,8 @@ export default function Onboarding() {
                   }
                 />
               </Step>
-              {/* ── STEP 3: Payment / Activate ─────────────────────────── */}
+
+              {/* ── STEP 3: Payment ────────────────────────────── */}
               <Step>
                 <PaymentStep
                   plan={formData.plan}
@@ -667,6 +778,91 @@ export default function Onboarding() {
                   isSavingDetails={isSaving || isSavingOnboarding}
                   isLegacyMigrated={isLegacyMigrated}
                 />
+              </Step>
+
+              {/* ── STEP 4: Join WhatsApp Group ────────────────── */}
+              <Step>
+                <div className="space-y-4 py-2">
+                  <div className="text-center space-y-1">
+                    <div className="text-4xl">💬</div>
+                    <h3 className="text-lg font-bold">Join a WhatsApp Group</h3>
+                    <p className="text-sm text-default-500">
+                      Join a teacher WhatsApp group to connect with the AOTF
+                      community. Tap any link below to join — your onboarding
+                      will complete automatically.
+                    </p>
+                  </div>
+
+                  {whatsappGroupsLoading && (
+                    <div className="flex justify-center py-6">
+                      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+
+                  {whatsappGroupsError && (
+                    <div className="p-3 rounded-xl bg-danger-50 border border-danger-200 text-danger-700 text-sm text-center">
+                      {whatsappGroupsError}
+                      <button
+                        className="block mx-auto mt-2 text-xs underline"
+                        onClick={() => {
+                          setWhatsappGroupsError(null);
+                          setWhatsappGroupsLoading(false);
+                          setWhatsappGroups([]);
+                        }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+
+                  {!whatsappGroupsLoading &&
+                    !whatsappGroupsError &&
+                    whatsappGroups.length === 0 && (
+                      <div className="p-4 rounded-xl bg-warning-50 border border-warning-200 text-warning-800 text-sm text-center">
+                        No WhatsApp groups are available right now. Please check
+                        back soon or contact support.
+                      </div>
+                    )}
+
+                  {whatsappGroups.map((group) => (
+                    <button
+                      key={group._id}
+                      className="w-full flex items-center justify-between gap-3 p-4 rounded-xl border border-success-200 bg-success-50 hover:bg-success-100 active:scale-[0.98] transition-all text-left disabled:opacity-60"
+                      disabled={!!whatsappCompleting || whatsappDone}
+                      onClick={() => void handleJoinGroup(group)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">💬</span>
+                        <div>
+                          <p className="font-semibold text-success-800">
+                            {group.label}
+                          </p>
+                          <p className="text-xs text-success-600">
+                            {group.memberCount}/{group.capacity} members
+                          </p>
+                        </div>
+                      </div>
+                      {whatsappCompleting === group._id ? (
+                        <div className="w-5 h-5 border-2 border-success border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <span className="text-success-600 text-sm font-medium">
+                          Join →
+                        </span>
+                      )}
+                    </button>
+                  ))}
+
+                  {whatsappDone && (
+                    <div className="p-4 rounded-xl bg-success-50 border border-success-200 text-success-800 text-sm text-center font-semibold">
+                      ✅ You've joined! Onboarding complete. Redirecting…
+                    </div>
+                  )}
+
+                  <p className="text-xs text-default-400 text-center pt-2">
+                    You can always rejoin or switch groups later from your
+                    profile.
+                  </p>
+                </div>
               </Step>
             </Stepper>
           </>

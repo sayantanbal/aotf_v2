@@ -17,6 +17,8 @@ export const PERMISSIONS = {
   ADMIN_ROLE_CHANGE: "admin:role_change",
   ADMIN_VIEW_METRICS: "admin:view_metrics",
   SUPERADMIN_MANAGE: "superadmin:manage",
+  WHATSAPP_MANAGE: "whatsapp:manage",
+  PAYMENT_RECOVER: "payment:recover",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

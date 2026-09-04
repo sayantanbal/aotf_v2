@@ -65,11 +65,11 @@ const { MONGODB_URI_LEGACY, MONGODB_URI, CLERK_SECRET_KEY } = process.env;
 
 if (!MONGODB_URI_LEGACY)
   throw new Error(
-    "Missing MONGODB_URI_LEGACY in env. This must point to the OLD production cluster."
+    "Missing MONGODB_URI_LEGACY in env. This must point to the OLD production cluster.",
   );
 if (!MONGODB_URI)
   throw new Error(
-    "Missing MONGODB_URI in env. This must point to the NEW app database."
+    "Missing MONGODB_URI in env. This must point to the NEW app database.",
   );
 if (!CLERK_SECRET_KEY) throw new Error("Missing CLERK_SECRET_KEY in env");
 
@@ -131,7 +131,7 @@ function makeUsername(email, suffix = 0) {
 async function migrate() {
   console.log("\n╔════════════════════════════════════════════════════════╗");
   console.log(
-    `║  AOTF Teachers → Clerk Migration  [${IS_LIVE ? "LIVE 🔴" : "DRY RUN 🟡"}]        ║`
+    `║  AOTF Teachers → Clerk Migration  [${IS_LIVE ? "LIVE 🔴" : "DRY RUN 🟡"}]        ║`,
   );
   console.log("╚════════════════════════════════════════════════════════╝\n");
 
@@ -186,7 +186,7 @@ async function migrate() {
     if (!email) {
       log(
         "⚠️ ",
-        `Skipping teacher with no email (teacherId: ${teacherId ?? teacher._id})`
+        `Skipping teacher with no email (teacherId: ${teacherId ?? teacher._id})`,
       );
       results.skipped++;
       continue;
@@ -199,7 +199,7 @@ async function migrate() {
     if (!IS_LIVE) {
       log(
         "🔍",
-        `[DRY RUN] ${email} | "${firstName} ${lastName}" | role: teacher | legacyId: ${teacherId ?? "n/a"}`
+        `[DRY RUN] ${email} | "${firstName} ${lastName}" | role: teacher | legacyId: ${teacherId ?? "n/a"}`,
       );
       results.created++;
       continue;
@@ -242,7 +242,6 @@ async function migrate() {
               // use "Forgot Password" to set a new one.
               skipPasswordChecks: true,
               skipPasswordRequirement: true,
-              skipLegalChecks: true,
               legalAcceptedAt: legacyLegalAcceptedAt(teacher),
               publicMetadata: metadata,
             });
@@ -253,7 +252,7 @@ async function migrate() {
                 (e) =>
                   e.code === "form_identifier_exists" ||
                   (e.meta?.paramName === "username" &&
-                    e.code === "form_identifier_exists")
+                    e.code === "form_identifier_exists"),
               ) ?? false;
             // Only retry on username collision; re-throw everything else
             if (!isUsernameConflict || attempt === 9) throw innerErr;
@@ -263,7 +262,7 @@ async function migrate() {
 
         log(
           "✅",
-          `Created: ${email} (teacher) | legacyId: ${teacherId ?? "n/a"}`
+          `Created: ${email} (teacher) | legacyId: ${teacherId ?? "n/a"}`,
         );
         results.created++;
       }
@@ -271,10 +270,7 @@ async function migrate() {
       const seedResult = await seedClerkUserInMongo(newDb, clerkUser);
       if (seedResult.action !== "skipped") {
         results.seeded++;
-        log(
-          "🗄️ ",
-          `MongoDB ${seedResult.action}: ${email} (${clerkUser.id})`
-        );
+        log("🗄️ ", `MongoDB ${seedResult.action}: ${email} (${clerkUser.id})`);
       }
 
       // Brief pause to respect Clerk's rate limits
@@ -302,10 +298,10 @@ async function migrate() {
   console.log("║                       SUMMARY                         ║");
   console.log("╚════════════════════════════════════════════════════════╝");
   console.log(
-    `  ✅  ${IS_LIVE ? "Created     " : "Would create"} : ${results.created}`
+    `  ✅  ${IS_LIVE ? "Created     " : "Would create"} : ${results.created}`,
   );
   console.log(
-    `  🗄️   ${IS_LIVE ? "Mongo seeded" : "Would seed  "} : ${results.seeded}`
+    `  🗄️   ${IS_LIVE ? "Mongo seeded" : "Would seed  "} : ${results.seeded}`,
   );
   console.log(`  ⏭️   Skipped      : ${results.skipped}`);
   console.log(`  ❌  Failed       : ${results.failed}`);
@@ -320,12 +316,12 @@ async function migrate() {
 
   if (!IS_LIVE) {
     console.log(
-      "\n💡 Happy with the output? Run the live migration:\n   node migrate-teachers-to-clerk.mjs --live\n"
+      "\n💡 Happy with the output? Run the live migration:\n   node migrate-teachers-to-clerk.mjs --live\n",
     );
   } else {
     console.log("\n🎉 Teacher migration complete.\n");
     console.log(
-      "ℹ️  Next step: run migrate-freelancers-to-clerk.mjs for freelancers.\n"
+      "ℹ️  Next step: run migrate-freelancers-to-clerk.mjs for freelancers.\n",
     );
   }
 

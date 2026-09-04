@@ -26,7 +26,6 @@ import {
 import { addToast } from "@heroui/toast";
 import { Plus } from "lucide-react";
 import { motion } from "motion/react";
-import { formatPhone, normalizePhone } from "@/lib/utils/phone";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,7 +56,6 @@ export default function AdminFab() {
   const [newUser, setNewUser] = useState({
     name: "",
     email: "",
-    phone: "",
     role: "teacher" as Role,
   });
   const [isCreating, setIsCreating] = useState(false);
@@ -88,9 +86,9 @@ export default function AdminFab() {
   };
 
   const handleCreateUser = async () => {
-    if (!newUser.name.trim() || !newUser.phone.trim() || !newUser.email.trim()) {
+    if (!newUser.name.trim() || !newUser.email.trim()) {
       addToast({
-        description: "Name, phone, and email are required",
+        description: "Name and email are required",
         color: "danger",
       });
       return;
@@ -103,8 +101,8 @@ export default function AdminFab() {
         body: JSON.stringify({
           name: newUser.name.trim(),
           email: newUser.email.trim(),
-          phone: newUser.phone.trim(),
           role: newUser.role,
+          legalAcceptedAt: new Date().toISOString(),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -118,11 +116,12 @@ export default function AdminFab() {
         color: "success",
       });
       window.dispatchEvent(new CustomEvent("admin-users-refresh"));
-      setNewUser({ name: "", email: "", phone: "", role: "teacher" });
+      setNewUser({ name: "", email: "", role: "teacher" });
       closeUser();
     } catch (err) {
       addToast({
-        description: err instanceof Error ? err.message : "Failed to create user",
+        description:
+          err instanceof Error ? err.message : "Failed to create user",
         color: "danger",
       });
     } finally {
@@ -155,17 +154,6 @@ export default function AdminFab() {
               placeholder="e.g. Anita Sharma"
               value={newUser.name}
               onValueChange={(v) => setNewUser((p) => ({ ...p, name: v }))}
-              isRequired
-              variant="bordered"
-            />
-            <Input
-              label="Phone Number"
-              placeholder="10-digit mobile number"
-              type="tel"
-              value={formatPhone(newUser.phone)}
-              onValueChange={(v) =>
-                setNewUser((p) => ({ ...p, phone: normalizePhone(v) }))
-              }
               isRequired
               variant="bordered"
             />

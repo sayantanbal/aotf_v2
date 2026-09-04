@@ -10,6 +10,7 @@ import {
   BookOpen,
   Briefcase,
   MessageSquare,
+  MessageCircle,
   Star,
   Users,
   GraduationCap,
@@ -26,7 +27,12 @@ import {
   User,
 } from "lucide-react";
 import { Avatar } from "@heroui/avatar";
-import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/dropdown";
+import {
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+} from "@heroui/dropdown";
 import type { AdminPermissionKey } from "@/lib/admin/admin-permissions";
 
 // ─── Nav items ─────────────────────────────────────────────────────────────
@@ -40,20 +46,71 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/admin",              label: "Dashboard",         icon: LayoutDashboard },
-  { href: "/admin/agenda-view",  label: "Updates",           icon: CalendarDays    },
-  { href: "/admin/tuitions",     label: "Tuitions",          icon: BookOpen,        permission: "canManagePosts"             },
-  { href: "/admin/jobs",         label: "Jobs",              icon: Briefcase,       permission: "canManageJobs"              },
-  { href: "/admin/enquiries",    label: "Enquiries",         icon: MessageSquare,   permission: "canHandleEnquiries"         },
-  { href: "/admin/feedbacks",    label: "Feedbacks",         icon: Star,            permission: "canHandleFeedbacks"         },
-  { href: "/admin/reviews",      label: "Reviews",           icon: Star                                                      },
-  { href: "/admin/users",        label: "Users",             icon: Users,           permission: "canManageUsers"             },
-  { href: "/admin/teachers",     label: "Renowned Teachers", icon: GraduationCap,   permission: "canManageRenownedTeachers"  },
-  { href: "/admin/ads",          label: "Ads",               icon: Megaphone                                                 },
-  { href: "/admin/invoices",     label: "Invoices",          icon: FileText                                                  },
-  { href: "/admin/payments",     label: "Payments",          icon: CreditCard,      permission: "canViewPayments"            },
-  { href: "/admin/activity",     label: "Activity",          icon: Activity,        permission: "canViewAuditLogs"           },
-  { href: "/admin/settings",     label: "Settings",          icon: Settings,        permission: "canManageAdmins"            },
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/agenda-view", label: "Updates", icon: CalendarDays },
+  {
+    href: "/admin/tuitions",
+    label: "Tuitions",
+    icon: BookOpen,
+    permission: "canManagePosts",
+  },
+  {
+    href: "/admin/jobs",
+    label: "Jobs",
+    icon: Briefcase,
+    permission: "canManageJobs",
+  },
+  {
+    href: "/admin/enquiries",
+    label: "Enquiries",
+    icon: MessageSquare,
+    permission: "canHandleEnquiries",
+  },
+  {
+    href: "/admin/feedbacks",
+    label: "Feedbacks",
+    icon: Star,
+    permission: "canHandleFeedbacks",
+  },
+  { href: "/admin/reviews", label: "Reviews", icon: Star },
+  {
+    href: "/admin/users",
+    label: "Users",
+    icon: Users,
+    permission: "canManageUsers",
+  },
+  {
+    href: "/admin/whatsapp",
+    label: "WhatsApp Groups",
+    icon: MessageCircle,
+    permission: "canManageWhatsAppGroups",
+  },
+  {
+    href: "/admin/teachers",
+    label: "Renowned Teachers",
+    icon: GraduationCap,
+    permission: "canManageRenownedTeachers",
+  },
+  { href: "/admin/ads", label: "Ads", icon: Megaphone },
+  { href: "/admin/invoices", label: "Invoices", icon: FileText },
+  {
+    href: "/admin/payments",
+    label: "Payments",
+    icon: CreditCard,
+    permission: "canViewPayments",
+  },
+  {
+    href: "/admin/activity",
+    label: "Activity",
+    icon: Activity,
+    permission: "canViewAuditLogs",
+  },
+  {
+    href: "/admin/settings",
+    label: "Settings",
+    icon: Settings,
+    permission: "canManageAdmins",
+  },
 ];
 
 // ─── Skeleton row ───────────────────────────────────────────────────────────
@@ -62,10 +119,7 @@ function NavSkeleton() {
   return (
     <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-        >
+        <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl">
           <div className="h-[17px] w-[17px] rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
           <div
             className="h-3 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse"
@@ -80,7 +134,7 @@ function NavSkeleton() {
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export default function AdminSidebar() {
-  const pathname  = usePathname();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -88,17 +142,23 @@ export default function AdminSidebar() {
   const { signOut } = useClerk();
 
   // Resolve permissions from Clerk publicMetadata
-  const permissions = (user?.publicMetadata?.permissions ?? {}) as Record<string, boolean>;
+  const metadata = (user?.publicMetadata ?? {}) as Record<string, unknown>;
+  const permissions = {
+    ...(metadata as Record<string, boolean>),
+    ...((metadata.permissions ?? {}) as Record<string, boolean>),
+  };
 
   // Filter nav items based on permissions
   const visibleItems = isLoaded
-    ? NAV_ITEMS.filter((item) =>
-        !item.permission || permissions[item.permission] === true
+    ? NAV_ITEMS.filter(
+        (item) => !item.permission || permissions[item.permission] === true,
       )
     : [];
 
   // Close on route change
-  useEffect(() => { setIsOpen(false); }, [pathname]);
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
 
   // Close on outside click
   useEffect(() => {
@@ -115,13 +175,13 @@ export default function AdminSidebar() {
   // Lock body scroll when open
   useEffect(() => {
     document.body.style.overflow = isOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [isOpen]);
 
   const isActive = (href: string) =>
-    href === "/admin"
-      ? pathname === "/admin"
-      : pathname.startsWith(href);
+    href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
   return (
     <>
@@ -195,19 +255,27 @@ export default function AdminSidebar() {
                       className={`
                         group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
                         transition-all duration-150 relative
-                        ${active
-                          ? "bg-primary/10 text-primary dark:bg-primary/20"
-                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100"
+                        ${
+                          active
+                            ? "bg-primary/10 text-primary dark:bg-primary/20"
+                            : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100"
                         }
                       `}
                     >
                       <Icon
                         size={17}
-                        className={active ? "text-primary" : "text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300"}
+                        className={
+                          active
+                            ? "text-primary"
+                            : "text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300"
+                        }
                       />
                       <span className="flex-1">{label}</span>
                       {active && (
-                        <ChevronRight size={14} className="text-primary opacity-70" />
+                        <ChevronRight
+                          size={14}
+                          className="text-primary opacity-70"
+                        />
                       )}
                     </Link>
                   );
@@ -221,18 +289,39 @@ export default function AdminSidebar() {
                 <Dropdown placement="top-start">
                   <DropdownTrigger>
                     <div className="flex items-center gap-3 cursor-pointer p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
-                      <Avatar src={user.imageUrl} name={user.fullName || "Admin"} className="w-8 h-8 text-tiny" />
+                      <Avatar
+                        src={user.imageUrl}
+                        name={user.fullName || "Admin"}
+                        className="w-8 h-8 text-tiny"
+                      />
                       <div className="flex flex-col flex-1 overflow-hidden">
-                        <span className="text-sm font-medium truncate text-zinc-800 dark:text-zinc-100">{user.fullName || "Admin"}</span>
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{user.primaryEmailAddress?.emailAddress}</span>
+                        <span className="text-sm font-medium truncate text-zinc-800 dark:text-zinc-100">
+                          {user.fullName || "Admin"}
+                        </span>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+                          {user.primaryEmailAddress?.emailAddress}
+                        </span>
                       </div>
                     </div>
                   </DropdownTrigger>
-                  <DropdownMenu aria-label="Admin Profile Actions" className="w-full">
-                    <DropdownItem key="profile" startContent={<User size={16} />} href="/admin/profile">
+                  <DropdownMenu
+                    aria-label="Admin Profile Actions"
+                    className="w-full"
+                  >
+                    <DropdownItem
+                      key="profile"
+                      startContent={<User size={16} />}
+                      href="/admin/profile"
+                    >
                       My Profile
                     </DropdownItem>
-                    <DropdownItem key="logout" className="text-danger" color="danger" startContent={<LogOut size={16} />} onPress={() => signOut({ redirectUrl: '/admin/login' })}>
+                    <DropdownItem
+                      key="logout"
+                      className="text-danger"
+                      color="danger"
+                      startContent={<LogOut size={16} />}
+                      onPress={() => signOut({ redirectUrl: "/admin/login" })}
+                    >
                       Sign Out
                     </DropdownItem>
                   </DropdownMenu>

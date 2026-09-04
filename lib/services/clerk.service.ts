@@ -45,6 +45,7 @@ export async function createAdminUser(params: CreateAdminUserParams) {
       password,
       skipPasswordRequirement: false,
       skipPasswordChecks: false,
+      legalAcceptedAt: new Date(),
       publicMetadata: {
         isAdmin: true,
         role,
