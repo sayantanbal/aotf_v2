@@ -1517,7 +1517,7 @@ function AdminCard({
                 variant="dot"
                 classNames={{ content: "text-xs" }}
               >
-                {isActive ? "Active" : "Inactive"}
+                {/* {isActive ? "Active" : "Inactive"} */}
               </Chip>
             </div>
             <div className="flex items-center gap-1.5">
@@ -1530,13 +1530,13 @@ function AdminCard({
               >
                 {roleLabel}
               </Chip>
-              <button
+              {/* <button
                 onClick={() => onCopyId(admin.id)}
                 className="flex items-center gap-0.5 text-[11px] text-default-400 hover:text-primary transition-colors"
               >
                 <Copy size={10} />
                 {admin.id}
-              </button>
+              </button> */}
             </div>
           </div>
         </div>
@@ -1552,20 +1552,20 @@ function AdminCard({
             <Users size={14} className="text-default-400 shrink-0" />
             <span className="text-default-600">@{admin.username}</span>
           </div>
-          <div className="flex items-center gap-2">
+          {/* <div className="flex items-center gap-2">
             <Clock size={14} className="text-default-400 shrink-0" />
             <span className="text-default-500 text-xs">
               Last login: {formatDateTime(admin.lastLogin)}
             </span>
-          </div>
+          </div> */}
         </div>
         <p className="text-xs text-default-400">
-          Created {formatDate(admin.createdAt)}
+          Joined at {formatDate(admin.createdAt)}
         </p>
       </CardBody>
 
       <CardFooter className="gap-2 pt-0">
-        <Button
+        {/* <Button
           size="sm"
           variant="flat"
           color={isActive ? "warning" : "success"}
@@ -1573,7 +1573,7 @@ function AdminCard({
           className="flex-1"
         >
           {isActive ? "Deactivate" : "Activate"}
-        </Button>
+        </Button> */}
         <Button
           size="sm"
           variant="flat"
@@ -1761,7 +1761,7 @@ function NotificationSettingsSection() {
       {/* Email Notifications */}
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center gap-2">
+          <div className="flex justify-between gap-2">
             <div className="p-2 rounded-lg bg-primary/10">
               <Mail size={18} className="text-primary" />
             </div>
