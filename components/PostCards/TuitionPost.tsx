@@ -165,7 +165,7 @@ const TuitionPost = ({
     applicationId &&
     currentStatus &&
     !["approved", "decline", "auto_declined", "withdrawn"].includes(
-      currentStatus
+      currentStatus,
     );
 
   const handleWithdraw = async () => {
@@ -507,7 +507,8 @@ const TuitionPost = ({
             <ApplyActionButton
               target="post"
               targetId={postId}
-              initialApplied={initialApplied}
+              initialApplied={initialApplied && currentStatus !== "withdrawn"}
+              onApplied={() => setCurrentStatus("applied")}
               isSignedIn={isSignedIn}
               isEligible={canApply}
               ineligibleLabel="Not Eligible"

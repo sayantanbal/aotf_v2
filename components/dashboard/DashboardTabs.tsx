@@ -37,6 +37,7 @@ export interface DashboardPostItem {
   updatedAt: string;
   isEdited: boolean;
   applicantCount: number;
+  createdByUserId?: { name?: string; avatar?: string | null };
   applicationStatus?: ApplicationStatus;
   applicationId?: string;
   dcDate?: string;
@@ -119,6 +120,7 @@ export default function DashboardTabs({
                 createdAt={new Date(item.createdAt)}
                 updatedAt={new Date(item.updatedAt)}
                 isEdited={item.isEdited}
+                createdByUserId={item.createdByUserId}
                 applicationStatus={item.applicationStatus}
                 applicationId={item.applicationId}
                 dcDate={item.dcDate}

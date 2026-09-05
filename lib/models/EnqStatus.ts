@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document, Model, models } from "mongoose";
 import { ENQUIRY_STATUSES, type EnquiryStatus } from "./Enquiry";
 
-export const ADMIN_ROLES = ["super_admin", "support_admin"] as const;
+export const ADMIN_ROLES = ["super_admin", "admin", "support_admin"] as const;
 export type AdminRole = (typeof ADMIN_ROLES)[number];
 
 export interface IEnqStatus extends Document {

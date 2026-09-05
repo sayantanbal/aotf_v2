@@ -19,7 +19,10 @@ jest.mock("@/lib/models/AuditLog", () => ({ __esModule: true, default: {} }));
 jest.mock("@clerk/nextjs/server", () => ({ auth: jest.fn() }));
 
 import * as fc from "fast-check";
-import { computeMonthBounds, computeGrowthPct } from "@/app/api/v1/admin/dashboard/route";
+import {
+  computeMonthBounds,
+  computeGrowthPct,
+} from "@/app/api/v1/admin/dashboard/route";
 
 // ─── Property 2: Month bounds are non-overlapping and cover the full month ────
 
@@ -38,6 +41,8 @@ describe("computeMonthBounds — Property 2: month bounds non-overlapping and co
   it("monthStart is midnight (00:00:00.000) on the 1st of the same calendar month", () => {
     fc.assert(
       fc.property(fc.date({ min: MIN_DATE, max: MAX_DATE }), (now) => {
+        fc.pre(Number.isFinite(now.getTime()));
+
         const { monthStart } = computeMonthBounds(now);
 
         expect(monthStart.getFullYear()).toBe(now.getFullYear());
@@ -48,17 +53,23 @@ describe("computeMonthBounds — Property 2: month bounds non-overlapping and co
         expect(monthStart.getSeconds()).toBe(0);
         expect(monthStart.getMilliseconds()).toBe(0);
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
   it("monthEnd is 23:59:59.999 on the last day of the same calendar month", () => {
     fc.assert(
       fc.property(fc.date({ min: MIN_DATE, max: MAX_DATE }), (now) => {
+        fc.pre(Number.isFinite(now.getTime()));
+
         const { monthEnd } = computeMonthBounds(now);
 
         // The last day of the month is the day before the 1st of next month
-        const expectedLastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const expectedLastDay = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0,
+        ).getDate();
 
         expect(monthEnd.getFullYear()).toBe(now.getFullYear());
         expect(monthEnd.getMonth()).toBe(now.getMonth());
@@ -68,7 +79,7 @@ describe("computeMonthBounds — Property 2: month bounds non-overlapping and co
         expect(monthEnd.getSeconds()).toBe(59);
         expect(monthEnd.getMilliseconds()).toBe(999);
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
@@ -83,7 +94,7 @@ describe("computeMonthBounds — Property 2: month bounds non-overlapping and co
 
         expect(monthStart.getTime() - prevMonthEnd.getTime()).toBe(1);
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 });
@@ -98,14 +109,11 @@ describe("computeMonthBounds — Property 2: month bounds non-overlapping and co
 describe("computeGrowthPct — Property 3: growth pct never throws", () => {
   it("always returns a finite number for any pair of non-negative integers", () => {
     fc.assert(
-      fc.property(
-        fc.tuple(fc.nat(), fc.nat()),
-        ([current, previous]) => {
-          const result = computeGrowthPct(current, previous);
-          return Number.isFinite(result);
-        }
-      ),
-      { numRuns: 100 }
+      fc.property(fc.tuple(fc.nat(), fc.nat()), ([current, previous]) => {
+        const result = computeGrowthPct(current, previous);
+        return Number.isFinite(result);
+      }),
+      { numRuns: 100 },
     );
   });
 
@@ -132,11 +140,12 @@ describe("computeGrowthPct — Property 6: growth formula round-trip", () => {
         fc.integer({ min: 1 }),
         (current, previous) => {
           const result = computeGrowthPct(current, previous);
-          const expected = Math.round(((current - previous) / previous) * 100 * 10) / 10;
+          const expected =
+            Math.round(((current - previous) / previous) * 100 * 10) / 10;
           return result === expected;
-        }
+        },
       ),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 });
@@ -157,9 +166,9 @@ describe("paid/unpaid partition — Property 1: paid+unpaid exhaustive and exclu
             paymentstatus: fc.oneof(
               fc.constant("done"),
               fc.constant("pending"),
-              fc.constant(undefined)
+              fc.constant(undefined),
             ),
-          })
+          }),
         ),
         (posts) => {
           const total = posts.length;
@@ -167,9 +176,9 @@ describe("paid/unpaid partition — Property 1: paid+unpaid exhaustive and exclu
           const unpaid = total - paid;
 
           return paid + unpaid === total;
-        }
+        },
       ),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 });
@@ -179,31 +188,49 @@ describe("paid/unpaid partition — Property 1: paid+unpaid exhaustive and exclu
 // Feature: admin-dashboard-stats, Property 4: classification mutual exclusivity
 
 type PostStatus = "open" | "matched" | "closed" | "cancelled" | "hold";
-type AppStatus = "applied" | "DC" | "GC" | "approved" | "decline" | "auto_declined" | "withdrawn";
+type AppStatus =
+  | "applied"
+  | "DC"
+  | "GC"
+  | "approved"
+  | "decline"
+  | "auto_declined"
+  | "withdrawn";
 
 interface TestPost {
   status: PostStatus;
   applications: { status: AppStatus }[];
 }
 
-function classifyPost(post: TestPost): "approved" | "ongoing" | "cancelled" | "none" {
-  const isApproved = post.applications.some(a => a.status === "approved");
+function classifyPost(
+  post: TestPost,
+): "approved" | "ongoing" | "cancelled" | "none" {
+  const isApproved = post.applications.some((a) => a.status === "approved");
   if (isApproved) return "approved";
-  const hasInProgress = post.applications.some(a => a.status === "DC" || a.status === "GC");
+  const hasInProgress = post.applications.some(
+    (a) => a.status === "DC" || a.status === "GC",
+  );
   if (post.status !== "cancelled" && hasInProgress) return "ongoing";
   if (post.status === "cancelled") return "cancelled";
   return "none";
 }
 
 const postStatusArb = fc.oneof(
-  fc.constant("open"), fc.constant("matched"), fc.constant("closed"),
-  fc.constant("cancelled"), fc.constant("hold")
+  fc.constant("open"),
+  fc.constant("matched"),
+  fc.constant("closed"),
+  fc.constant("cancelled"),
+  fc.constant("hold"),
 ) as fc.Arbitrary<PostStatus>;
 
 const appStatusArb = fc.oneof(
-  fc.constant("applied"), fc.constant("DC"), fc.constant("GC"),
-  fc.constant("approved"), fc.constant("decline"), fc.constant("auto_declined"),
-  fc.constant("withdrawn")
+  fc.constant("applied"),
+  fc.constant("DC"),
+  fc.constant("GC"),
+  fc.constant("approved"),
+  fc.constant("decline"),
+  fc.constant("auto_declined"),
+  fc.constant("withdrawn"),
 ) as fc.Arbitrary<AppStatus>;
 
 const testPostArb = fc.record({
@@ -222,21 +249,23 @@ describe("classifyPost — Property 4: classification mutual exclusivity", () =>
         const validBuckets = ["approved", "ongoing", "cancelled", "none"];
         return validBuckets.includes(result);
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
   it("a post with any approved application must be classified as 'approved' (priority rule)", () => {
     fc.assert(
       fc.property(testPostArb, (post) => {
-        const hasApproved = post.applications.some(a => a.status === "approved");
+        const hasApproved = post.applications.some(
+          (a) => a.status === "approved",
+        );
         const result = classifyPost(post);
         if (hasApproved) {
           return result === "approved";
         }
         return true;
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
@@ -245,11 +274,11 @@ describe("classifyPost — Property 4: classification mutual exclusivity", () =>
       fc.property(testPostArb, (post) => {
         const result = classifyPost(post);
         if (result === "ongoing") {
-          return !post.applications.some(a => a.status === "approved");
+          return !post.applications.some((a) => a.status === "approved");
         }
         return true;
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
@@ -258,11 +287,11 @@ describe("classifyPost — Property 4: classification mutual exclusivity", () =>
       fc.property(testPostArb, (post) => {
         const result = classifyPost(post);
         if (result === "cancelled") {
-          return !post.applications.some(a => a.status === "approved");
+          return !post.applications.some((a) => a.status === "approved");
         }
         return true;
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 });
@@ -283,10 +312,10 @@ describe("revenueThisMonth — Property 5: revenue equals sum of monthlyBudget o
             paymentstatus: fc.oneof(
               fc.constant("done"),
               fc.constant("pending"),
-              fc.constant(undefined)
+              fc.constant(undefined),
             ),
             monthlyBudget: fc.nat({ max: 100_000 }),
-          })
+          }),
         ),
         (posts) => {
           const expectedRevenue = posts
@@ -299,9 +328,9 @@ describe("revenueThisMonth — Property 5: revenue equals sum of monthlyBudget o
           }, 0);
 
           return actualRevenue === expectedRevenue;
-        }
+        },
       ),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 });

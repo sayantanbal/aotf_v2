@@ -8,8 +8,9 @@ import User from "@/lib/models/User";
 import Post from "@/lib/models/Post";
 import Enquiry from "@/lib/models/Enquiry";
 import Payment from "@/lib/models/Payment";
+import Invoice from "@/lib/models/Invoice";
 import Feedback from "@/lib/models/Feedback";
-import AuditLog from "@/lib/models/AuditLog";
+import AdminActivityLog from "@/lib/models/admin/AdminActivityLog";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -27,13 +28,13 @@ function daysAgo(n: number) {
 }
 
 export function computeMonthBounds(now: Date) {
-  const year  = now.getFullYear();
+  const year = now.getFullYear();
   const month = now.getMonth(); // 0-indexed
   return {
-    monthStart:     new Date(year, month,     1,  0,  0,  0,   0),
-    monthEnd:       new Date(year, month + 1, 0, 23, 59, 59, 999),
-    prevMonthStart: new Date(year, month - 1, 1,  0,  0,  0,   0),
-    prevMonthEnd:   new Date(year, month,     0, 23, 59, 59, 999),
+    monthStart: new Date(year, month, 1, 0, 0, 0, 0),
+    monthEnd: new Date(year, month + 1, 0, 23, 59, 59, 999),
+    prevMonthStart: new Date(year, month - 1, 1, 0, 0, 0, 0),
+    prevMonthEnd: new Date(year, month, 0, 23, 59, 59, 999),
   };
 }
 
@@ -45,9 +46,10 @@ export function computeGrowthPct(current: number, previous: number): number {
 // ─── Role-specific aggregators ──────────────────────────────────────────────
 
 async function getSuperAdminData(adminClerkId: string) {
-  const { monthStart, monthEnd, prevMonthStart, prevMonthEnd } = computeMonthBounds(new Date());
+  const { monthStart, monthEnd, prevMonthStart, prevMonthEnd } =
+    computeMonthBounds(new Date());
   const thirtyDaysAgo = daysAgo(30);
-  const todayStart    = startOfDay(new Date());
+  const todayStart = startOfDay(new Date());
 
   const [
     totalUsers,
@@ -63,6 +65,7 @@ async function getSuperAdminData(adminClerkId: string) {
     totalFeedbacks,
     openFeedbacks,
     postsFacetResult,
+    invoiceRevenueThisMonth,
     classificationResult,
     currentMonthUsers,
     prevMonthUsers,
@@ -106,9 +109,7 @@ async function getSuperAdminData(adminClerkId: string) {
       .lean(),
 
     // Posts by status
-    Post.aggregate([
-      { $group: { _id: "$status", count: { $sum: 1 } } },
-    ]),
+    Post.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
 
     // Revenue trend — daily totals for last 30 days
     Payment.aggregate([
@@ -125,10 +126,10 @@ async function getSuperAdminData(adminClerkId: string) {
     ]),
 
     // Audit log (last 5)
-    AuditLog.find()
+    AdminActivityLog.find()
       .sort({ createdAt: -1 })
       .limit(5)
-      .select("adminUsername action targetType targetIdentifier createdAt")
+      .select("adminUsername adminName action targetType targetRefId createdAt")
       .lean(),
 
     // Total feedbacks
@@ -137,7 +138,7 @@ async function getSuperAdminData(adminClerkId: string) {
     // Open (unresolved) feedbacks
     Feedback.countDocuments({ status: "open" }),
 
-    // Posts this month: total, paid count, and revenue (monthlyBudget on paid posts)
+    // Posts this month: total and paid count
     Post.aggregate([
       { $match: { createdAt: { $gte: monthStart, $lte: monthEnd } } },
       {
@@ -146,14 +147,33 @@ async function getSuperAdminData(adminClerkId: string) {
             {
               $group: {
                 _id: null,
-                total:   { $sum: 1 },
-                paid:    { $sum: { $cond: [{ $eq: ["$paymentstatus", "done"] }, 1, 0] } },
-                revenue: { $sum: { $cond: [{ $eq: ["$paymentstatus", "done"] }, "$monthlyBudget", 0] } },
-              }
-            }
-          ]
-        }
-      }
+                total: { $sum: 1 },
+                paid: {
+                  $sum: { $cond: [{ $eq: ["$paymentstatus", "done"] }, 1, 0] },
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]),
+
+    // Invoice revenue this month, grouped by currency. Count only the latest
+    // revision so editing an invoice does not double-count its grand total.
+    Invoice.aggregate([
+      {
+        $match: {
+          isLatest: true,
+          invoiceDate: { $gte: monthStart, $lte: monthEnd },
+        },
+      },
+      {
+        $group: {
+          _id: "$amount.currency",
+          total: { $sum: "$amount.grandTotal" },
+        },
+      },
+      { $sort: { _id: 1 } },
     ]),
 
     // Approved / Ongoing / Cancelled post classification this month
@@ -165,23 +185,37 @@ async function getSuperAdminData(adminClerkId: string) {
           localField: "postId",
           foreignField: "postId",
           as: "applications",
-        }
+        },
       },
       {
         $addFields: {
           isApproved: {
             $gt: [
-              { $size: { $filter: { input: "$applications", cond: { $eq: ["$$this.status", "approved"] } } } },
-              0
-            ]
+              {
+                $size: {
+                  $filter: {
+                    input: "$applications",
+                    cond: { $eq: ["$$this.status", "approved"] },
+                  },
+                },
+              },
+              0,
+            ],
           },
           hasInProgress: {
             $gt: [
-              { $size: { $filter: { input: "$applications", cond: { $in: ["$$this.status", ["DC", "GC"]] } } } },
-              0
-            ]
+              {
+                $size: {
+                  $filter: {
+                    input: "$applications",
+                    cond: { $in: ["$$this.status", ["DC", "GC"]] },
+                  },
+                },
+              },
+              0,
+            ],
           },
-        }
+        },
       },
       {
         $group: {
@@ -190,58 +224,92 @@ async function getSuperAdminData(adminClerkId: string) {
           ongoing: {
             $sum: {
               $cond: [
-                { $and: [{ $eq: ["$isApproved", false] }, { $ne: ["$status", "cancelled"] }, "$hasInProgress"] },
-                1, 0
-              ]
-            }
+                {
+                  $and: [
+                    { $eq: ["$isApproved", false] },
+                    { $ne: ["$status", "cancelled"] },
+                    "$hasInProgress",
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
           },
           cancelled: {
             $sum: {
               $cond: [
-                { $and: [{ $eq: ["$isApproved", false] }, { $eq: ["$status", "cancelled"] }] },
-                1, 0
-              ]
-            }
+                {
+                  $and: [
+                    { $eq: ["$isApproved", false] },
+                    { $eq: ["$status", "cancelled"] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
           },
-        }
-      }
+        },
+      },
     ]),
 
     // Current month new users
     User.countDocuments({ createdAt: { $gte: monthStart, $lte: monthEnd } }),
 
     // Previous month new users (for growth %)
-    User.countDocuments({ createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd } }),
+    User.countDocuments({
+      createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd },
+    }),
 
     // All-time blocked users
     User.countDocuments({ status: "blocked" }),
   ]);
 
   // Normalise posts facet result — empty array means no posts this month
-  const postsFacetRaw = (postsFacetResult as Array<{ totalAndPayment: Array<{ total: number; paid: number; revenue: number }> }>)?.[0]?.totalAndPayment?.[0] ?? { total: 0, paid: 0, revenue: 0 };
+  const postsFacetRaw = (
+    postsFacetResult as Array<{
+      totalAndPayment: Array<{ total: number; paid: number }>;
+    }>
+  )?.[0]?.totalAndPayment?.[0] ?? { total: 0, paid: 0 };
   const unpaid = postsFacetRaw.total - postsFacetRaw.paid;
   const postsThisMonthRaw = {
-    total:   postsFacetRaw.total,
-    paid:    postsFacetRaw.paid,
+    total: postsFacetRaw.total,
+    paid: postsFacetRaw.paid,
     unpaid,
-    revenue: postsFacetRaw.revenue,
   };
 
+  const revenueThisMonth = (
+    invoiceRevenueThisMonth as Array<{ _id: string; total: number }>
+  ).map(({ _id, total }) => ({
+    currency: _id || "INR",
+    total,
+  }));
+
   // Normalise classification result — empty array means no posts this month
-  const classificationRaw = (classificationResult as Array<{ approved: number; ongoing: number; cancelled: number }>)?.[0] ?? { approved: 0, ongoing: 0, cancelled: 0 };
+  const classificationRaw = (
+    classificationResult as Array<{
+      approved: number;
+      ongoing: number;
+      cancelled: number;
+    }>
+  )?.[0] ?? { approved: 0, ongoing: 0, cancelled: 0 };
   const approvedPostsThisMonthRaw = {
-    approved:  classificationRaw.approved,
-    ongoing:   classificationRaw.ongoing,
+    approved: classificationRaw.approved,
+    ongoing: classificationRaw.ongoing,
     cancelled: classificationRaw.cancelled,
   };
 
   // Compute growth percentage for users
-  const growthPct = computeGrowthPct(currentMonthUsers as number, prevMonthUsers as number);
+  const growthPct = computeGrowthPct(
+    currentMonthUsers as number,
+    prevMonthUsers as number,
+  );
 
   const usersThisMonthRaw = {
-    total:    currentMonthUsers as number,
+    total: currentMonthUsers as number,
     growthPct,
-    blocked:  blockedUsers as number,
+    blocked: blockedUsers as number,
   };
 
   // Normalise enquiry breakdown into a map
@@ -269,9 +337,9 @@ async function getSuperAdminData(adminClerkId: string) {
       totalUsers,
       activePosts,
       enquiries: {
-        new:        enqMap["new"]         ?? 0,
+        new: enqMap["new"] ?? 0,
         inProgress: enqMap["in_progress"] ?? 0,
-        total:      Object.values(enqMap).reduce((a, b) => a + b, 0),
+        total: Object.values(enqMap).reduce((a, b) => a + b, 0),
       },
       revenue: (revenueTotal as Array<{ total: number }>)[0]?.total ?? 0,
       admins: adminMap,
@@ -279,31 +347,37 @@ async function getSuperAdminData(adminClerkId: string) {
 
       // ── New per-month keys (additive) ────────────────────────────────
       postsThisMonth: {
-        total:  postsThisMonthRaw.total,
-        paid:   postsThisMonthRaw.paid,
+        total: postsThisMonthRaw.total,
+        paid: postsThisMonthRaw.paid,
         unpaid: postsThisMonthRaw.unpaid,
       },
       approvedPostsThisMonth: {
-        approved:  approvedPostsThisMonthRaw.approved,
-        ongoing:   approvedPostsThisMonthRaw.ongoing,
+        approved: approvedPostsThisMonthRaw.approved,
+        ongoing: approvedPostsThisMonthRaw.ongoing,
         cancelled: approvedPostsThisMonthRaw.cancelled,
       },
       usersThisMonth: {
-        total:     usersThisMonthRaw.total,
+        total: usersThisMonthRaw.total,
         growthPct: usersThisMonthRaw.growthPct,
-        blocked:   usersThisMonthRaw.blocked,
+        blocked: usersThisMonthRaw.blocked,
       },
-      revenueThisMonth: postsThisMonthRaw.revenue,
+      revenueThisMonth,
     },
     postsByStatus: postsMap,
     recentPayments,
     recentEnquiries,
     revenueTrend: revenueTrend as Array<{ _id: string; total: number }>,
-    recentAuditLog,
+    recentAuditLog: recentAuditLog.map((log) => ({
+      ...log,
+      targetIdentifier: log.targetRefId,
+    })),
   };
 }
 
-async function getAdminData(adminDoc: { clerkId: string; _id: mongoose.Types.ObjectId }) {
+async function getAdminData(adminDoc: {
+  clerkId: string;
+  _id: mongoose.Types.ObjectId;
+}) {
   const [
     activePosts,
     enquiryBreakdown,
@@ -318,9 +392,7 @@ async function getAdminData(adminDoc: { clerkId: string; _id: mongoose.Types.Obj
       { $group: { _id: "$currentStatus", count: { $sum: 1 } } },
     ]),
 
-    Post.aggregate([
-      { $group: { _id: "$status", count: { $sum: 1 } } },
-    ]),
+    Post.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
 
     Enquiry.find()
       .sort({ createdAt: -1 })
@@ -350,15 +422,15 @@ async function getAdminData(adminDoc: { clerkId: string; _id: mongoose.Types.Obj
     stats: {
       activePosts,
       enquiries: {
-        new:        enqMap["new"]         ?? 0,
+        new: enqMap["new"] ?? 0,
         inProgress: enqMap["in_progress"] ?? 0,
-        total:      Object.values(enqMap).reduce((a, b) => a + b, 0),
+        total: Object.values(enqMap).reduce((a, b) => a + b, 0),
       },
     },
     postsByStatus: postsMap,
     recentEnquiries,
     myActivity: {
-      postsCreated:    myPostsCount,
+      postsCreated: myPostsCount,
       enquiriesHandled: myEnquiriesCount,
     },
   };
@@ -367,36 +439,35 @@ async function getAdminData(adminDoc: { clerkId: string; _id: mongoose.Types.Obj
 async function getSupportAdminData(adminDoc: { _id: mongoose.Types.ObjectId }) {
   const todayStart = startOfDay(new Date());
 
-  const [
-    myOpenEnquiries,
-    myEnquiryBreakdown,
-    handledToday,
-    recentFeedbacks,
-  ] = await Promise.all([
-    Enquiry.countDocuments({
-      lastActionByAdminId: adminDoc._id,
-      currentStatus: { $in: ["new", "in_progress", "contacted"] },
-    }),
+  const [myOpenEnquiries, myEnquiryBreakdown, handledToday, recentFeedbacks] =
+    await Promise.all([
+      Enquiry.countDocuments({
+        lastActionByAdminId: adminDoc._id,
+        currentStatus: { $in: ["new", "in_progress", "contacted"] },
+      }),
 
-    Enquiry.aggregate([
-      { $match: { lastActionByAdminId: adminDoc._id } },
-      { $group: { _id: "$currentStatus", count: { $sum: 1 } } },
-    ]),
+      Enquiry.aggregate([
+        { $match: { lastActionByAdminId: adminDoc._id } },
+        { $group: { _id: "$currentStatus", count: { $sum: 1 } } },
+      ]),
 
-    Enquiry.countDocuments({
-      lastActionByAdminId: adminDoc._id,
-      lastActionAt: { $gte: todayStart },
-    }),
+      Enquiry.countDocuments({
+        lastActionByAdminId: adminDoc._id,
+        lastActionAt: { $gte: todayStart },
+      }),
 
-    Feedback.find({ handledByAdminId: adminDoc._id })
-      .sort({ handledAt: -1 })
-      .limit(5)
-      .select("userSnapshot.name category subject status handledAt createdAt")
-      .lean(),
-  ]);
+      Feedback.find({ handledByAdminId: adminDoc._id })
+        .sort({ handledAt: -1 })
+        .limit(5)
+        .select("userSnapshot.name category subject status handledAt createdAt")
+        .lean(),
+    ]);
 
   const enqMap: Record<string, number> = {};
-  for (const row of myEnquiryBreakdown as Array<{ _id: string; count: number }>) {
+  for (const row of myEnquiryBreakdown as Array<{
+    _id: string;
+    count: number;
+  }>) {
     enqMap[row._id] = row.count;
   }
 
@@ -406,10 +477,10 @@ async function getSupportAdminData(adminDoc: { _id: mongoose.Types.ObjectId }) {
       myOpenEnquiries,
       handledToday,
       enquiryBreakdown: {
-        new:        enqMap["new"]         ?? 0,
+        new: enqMap["new"] ?? 0,
         inProgress: enqMap["in_progress"] ?? 0,
-        contacted:  enqMap["contacted"]   ?? 0,
-        resolved:   enqMap["resolved"]    ?? 0,
+        contacted: enqMap["contacted"] ?? 0,
+        resolved: enqMap["resolved"] ?? 0,
       },
     },
     recentFeedbacks,
@@ -429,18 +500,20 @@ export async function GET() {
 
     const adminRaw = await Admin.findOne(
       { clerkId: userId },
-      { clerkId: 1, role: 1, isActive: 1, _id: 1 }
+      { clerkId: 1, role: 1, isActive: 1, _id: 1 },
     ).lean();
 
     if (!adminRaw || !adminRaw.isActive) {
       return NextResponse.json(
         { error: "Forbidden: admin not active" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
     // Cast _id safely — lean() returns ObjectId at runtime
-    const admin = adminRaw as typeof adminRaw & { _id: mongoose.Types.ObjectId };
+    const admin = adminRaw as typeof adminRaw & {
+      _id: mongoose.Types.ObjectId;
+    };
 
     let data;
     if (admin.role === "super_admin") {

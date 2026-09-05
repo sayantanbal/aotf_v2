@@ -17,6 +17,7 @@ import { sourceLists } from "@/lib/validations/forms";
 import { createPost, listPosts } from "@/lib/services/post.service";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { logActivity } from "@/lib/admin/logActivity";
+import { updateEnquiryStatus } from "@/lib/services/enquiry.service";
 
 /** 10 post creations per IP per minute */
 const createLimiter = createRateLimiter({ windowMs: 60_000, max: 10 });
@@ -88,6 +89,22 @@ export async function POST(request: NextRequest) {
       ...input,
       createdByAdminClerkId: currentAdmin.clerkId,
     });
+
+    if (input.enquiryId) {
+      await updateEnquiryStatus(input.enquiryId, {
+        toStatus: "resolved",
+        action: `Enquiry converted to tuition post ${post.postId}`,
+        notes: `Converted to tuition post ${post.postId}`,
+        adminId: currentAdmin._id.toString(),
+        adminName: currentAdmin.name ?? currentAdmin.username ?? "Admin",
+        adminRole:
+          currentAdmin.role === "support_admin"
+            ? "support_admin"
+            : currentAdmin.role === "admin"
+              ? "admin"
+              : "super_admin",
+      });
+    }
 
     if (input.source === "referral" && input.referralUserName?.trim()) {
       await Referral.create({

@@ -151,7 +151,6 @@ export default function EnquiryCard({
 
     setIsUpdating(true);
     try {
-      // TODO: Replace with actual admin info from auth session
       const res = await fetch(`/api/v1/enquiry/${enquiry._id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -159,9 +158,6 @@ export default function EnquiryCard({
           toStatus: selectedStatus,
           action: `Status changed from ${enquiry.currentStatus} to ${selectedStatus}`,
           notes: notes || undefined,
-          adminId: "000000000000000000000000", // TODO: from auth
-          adminName: "Admin", // TODO: from auth
-          adminRole: "super_admin", // TODO: from auth
         }),
       });
 
@@ -328,7 +324,10 @@ export default function EnquiryCard({
           {/* Create Dropdown */}
           <Dropdown placement="top">
             <DropdownTrigger>
-              <Button color="secondary"><SquarePen />Create</Button>
+              <Button color="secondary">
+                <SquarePen />
+                Create
+              </Button>
             </DropdownTrigger>
             <DropdownMenu
               aria-label="Create Post Type"

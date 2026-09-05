@@ -136,7 +136,9 @@ async function attachApplicantAvatars(
       applicantSnapshot: {
         ...application.applicantSnapshot,
         avatarUrl: applicantClerkId
-          ? (avatarMap.get(applicantClerkId) ?? application.applicantSnapshot?.avatarUrl ?? null)
+          ? (avatarMap.get(applicantClerkId) ??
+            application.applicantSnapshot?.avatarUrl ??
+            null)
           : (application.applicantSnapshot?.avatarUrl ?? null),
       },
     };
@@ -157,13 +159,17 @@ async function attachApplicantDetails(
     .map((id) => new mongoose.Types.ObjectId(id));
 
   const profiles = validObjectIds.length
-    ? await Profile.find({ _id: mongoose.trusted({ $in: validObjectIds }) }).lean()
+    ? await Profile.find({
+        _id: mongoose.trusted({ $in: validObjectIds }),
+      }).lean()
     : [];
 
   const clerkIds = profiles.map((p) => p.clerkId).filter(Boolean) as string[];
 
   const onboardings = clerkIds.length
-    ? await OnboardingDetails.find({ clerkId: mongoose.trusted({ $in: clerkIds }) }).lean()
+    ? await OnboardingDetails.find({
+        clerkId: mongoose.trusted({ $in: clerkIds }),
+      }).lean()
     : [];
 
   const profileMap = new Map(profiles.map((p) => [String(p._id), p]));
@@ -172,14 +178,26 @@ async function attachApplicantDetails(
   );
 
   return applications.map((app) => {
-    const snap = app.applicantSnapshot || ({} as IApplicantSnapshot & Record<string, any>);
+    const snap =
+      app.applicantSnapshot || ({} as IApplicantSnapshot & Record<string, any>);
     const profile = profileMap.get(String(app.profileId));
-    const onboarding = profile ? onboardingMap.get(profile.clerkId ?? "") : undefined;
+    const onboarding = profile
+      ? onboardingMap.get(profile.clerkId ?? "")
+      : undefined;
 
     const board = snap.board ?? profile?.board ?? onboarding?.board ?? null;
-    const qualification = snap.qualification ?? profile?.qualification ?? onboarding?.qualification ?? null;
-    const teachingExp = snap.teachingExp ?? profile?.teachingExp ?? onboarding?.teachingExp ?? null;
-    const address = snap.address ?? profile?.address ?? onboarding?.address ?? null;
+    const qualification =
+      snap.qualification ??
+      profile?.qualification ??
+      onboarding?.qualification ??
+      null;
+    const teachingExp =
+      snap.teachingExp ??
+      profile?.teachingExp ??
+      onboarding?.teachingExp ??
+      null;
+    const address =
+      snap.address ?? profile?.address ?? onboarding?.address ?? null;
 
     return {
       ...app,
@@ -218,11 +236,11 @@ export async function getApplicantPermissionsByClerkId(
   const user = options.ensureUser
     ? await ensureUserRecord(clerkId)
     : await User.findOne({ clerkId }).lean<{
-      _id: mongoose.Types.ObjectId;
-      role: "teacher" | "teacher_candidate" | "admin";
-      status: "active" | "blocked" | "deleted";
-      plan?: { hasCandidateAccess?: boolean | null } | null;
-    }>();
+        _id: mongoose.Types.ObjectId;
+        role: "teacher" | "teacher_candidate" | "admin";
+        status: "active" | "blocked" | "deleted";
+        plan?: { hasCandidateAccess?: boolean | null } | null;
+      }>();
 
   if (!user) {
     return null;
@@ -409,7 +427,11 @@ export async function hasAppliedToPost(
 ): Promise<boolean> {
   await dbConnect();
 
-  const existing = await Application.exists({ applicantId, postId });
+  const existing = await Application.exists({
+    applicantId,
+    postId,
+    status: mongoose.trusted({ $ne: "withdrawn" }),
+  });
   return Boolean(existing);
 }
 
@@ -440,9 +462,42 @@ export async function createPostApplication(
     postId: input.postId,
     applicantId: input.applicantId,
     applicantType: input.applicantType,
-  }).lean();
+  }).lean<IApplication>();
 
   if (existing) {
+    if (existing.status === "withdrawn") {
+      const reactivated = await Application.findOneAndUpdate(
+        {
+          applicationId: existing.applicationId,
+          status: "withdrawn",
+        },
+        {
+          $set: {
+            profileId: input.profileId,
+            applicantSnapshot: input.applicantSnapshot,
+            coverLetter: input.coverLetter,
+            status: "applied",
+            isActive: true,
+            appliedAt: new Date(),
+          },
+          $unset: {
+            declineMeta: 1,
+            dcDate: 1,
+            dcMeta: 1,
+            gcMeta: 1,
+            approvalMeta: 1,
+          },
+        },
+        { new: true, runValidators: true },
+      );
+
+      if (!reactivated) {
+        throw new ConflictError("Application state changed. Please try again.");
+      }
+
+      return reactivated;
+    }
+
     throw new ConflictError("You have already applied to this tuition post.");
   }
 
@@ -527,11 +582,12 @@ export async function getApplicationsByPostId(
   await dbConnect();
 
   const applications = await Application.find({ postId })
-    .sort({ appliedAt: -1 })
+    .sort({ appliedAt: 1 })
     .lean<IApplication[]>();
 
   const enrichedApplications = await attachApplicantAvatars(applications);
-  const detailedApplications = await attachApplicantDetails(enrichedApplications);
+  const detailedApplications =
+    await attachApplicantDetails(enrichedApplications);
 
   return {
     applications: detailedApplications,
@@ -548,7 +604,7 @@ export async function getApplicationsByJobIdPublic(
   await dbConnect();
 
   const applications = await Application.find({ jobIdPublic })
-    .sort({ appliedAt: -1 })
+    .sort({ appliedAt: 1 })
     .lean<IApplication[]>();
 
   const enrichedApplications = await attachApplicantAvatars(applications);
@@ -851,12 +907,8 @@ export async function updateApplicationStatus(
     application.postId &&
     typeof paymentDone === "boolean"
   ) {
-    const defaultTentative = new Date(
-      now.getTime() + 25 * 24 * 60 * 60 * 1000,
-    );
-    const paymentDate = paymentDone
-      ? (postPaymentDate ?? now)
-      : null;
+    const defaultTentative = new Date(now.getTime() + 25 * 24 * 60 * 60 * 1000);
+    const paymentDate = paymentDone ? (postPaymentDate ?? now) : null;
     const tentativeDate = paymentDone
       ? null
       : (postPaymentDate ?? defaultTentative);
@@ -874,7 +926,11 @@ export async function updateApplicationStatus(
     );
   }
 
-  if (status === "approved" && application.postId && typeof paymentDone !== "boolean") {
+  if (
+    status === "approved" &&
+    application.postId &&
+    typeof paymentDone !== "boolean"
+  ) {
     await Post.updateOne(
       { postId: application.postId },
       {
@@ -903,7 +959,9 @@ export async function updateApplicationStatus(
     }
 
     // Get the IDs of the applications that will be auto-declined BEFORE updating them
-    const docsToDecline = await Application.find(filter).select("_id").lean() as any[];
+    const docsToDecline = (await Application.find(filter)
+      .select("_id")
+      .lean()) as any[];
     const docsToDeclineIds = docsToDecline.map((d) => d._id);
 
     await Application.updateMany(filter, {
@@ -920,23 +978,25 @@ export async function updateApplicationStatus(
     // ── Sync auto-declined docs to calendar_events ────────────────────────
     try {
       if (docsToDeclineIds.length > 0) {
-        const declined = await Application.find({ _id: { $in: docsToDeclineIds } }).lean() as any[];
+        const declined = (await Application.find({
+          _id: { $in: docsToDeclineIds },
+        }).lean()) as any[];
         const inputs = declined
           .map((d) => mapApplication(d))
           .filter((x): x is NonNullable<typeof x> => x !== null);
         await bulkUpsertCalendarEvents(inputs);
       }
     } catch (err) {
-      console.error("[applicationService] calendar bulk-upsert after auto-decline failed:", err);
+      console.error(
+        "[applicationService] calendar bulk-upsert after auto-decline failed:",
+        err,
+      );
     }
   }
 
   // ─── Un-auto-decline others when reverting from approved ──────────────
 
-  if (
-    application.status === "approved" &&
-    status !== "approved"
-  ) {
+  if (application.status === "approved" && status !== "approved") {
     if (application.postId) {
       await Post.updateOne(
         { postId: application.postId },
@@ -964,7 +1024,9 @@ export async function updateApplicationStatus(
     }
 
     // Get the IDs of the applications that will be reverted BEFORE updating them
-    const docsToRevert = await Application.find(filter).select("_id").lean() as any[];
+    const docsToRevert = (await Application.find(filter)
+      .select("_id")
+      .lean()) as any[];
     const docsToRevertIds = docsToRevert.map((d) => d._id);
 
     await Application.updateMany(filter, {
@@ -977,14 +1039,19 @@ export async function updateApplicationStatus(
     // ── Sync reverted docs to calendar_events ─────────────────────────────
     try {
       if (docsToRevertIds.length > 0) {
-        const reverted = await Application.find({ _id: { $in: docsToRevertIds } }).lean() as any[];
+        const reverted = (await Application.find({
+          _id: { $in: docsToRevertIds },
+        }).lean()) as any[];
         const inputs = reverted
           .map((d) => mapApplication(d))
           .filter((x): x is NonNullable<typeof x> => x !== null);
         await bulkUpsertCalendarEvents(inputs);
       }
     } catch (err) {
-      console.error("[applicationService] calendar bulk-upsert after revert failed:", err);
+      console.error(
+        "[applicationService] calendar bulk-upsert after revert failed:",
+        err,
+      );
     }
   }
 

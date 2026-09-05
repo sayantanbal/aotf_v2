@@ -16,6 +16,7 @@ import { sourceLists } from "@/lib/validations/forms";
 import { createJob, listJobs } from "@/lib/services/job.service";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { logActivity } from "@/lib/admin/logActivity";
+import { updateEnquiryStatus } from "@/lib/services/enquiry.service";
 
 /** 10 job creations per IP per minute */
 const createLimiter = createRateLimiter({ windowMs: 60_000, max: 10 });
@@ -83,6 +84,21 @@ export async function POST(request: NextRequest) {
       createdByAdminId: currentAdmin._id.toString(),
     });
 
+    if (input.enquiryId) {
+      await updateEnquiryStatus(input.enquiryId, {
+        toStatus: "resolved",
+        action: `Enquiry converted to job ${job.jobId}`,
+        notes: `Converted to job ${job.jobId}`,
+        adminId: currentAdmin._id.toString(),
+        adminName: currentAdmin.name ?? currentAdmin.username ?? "Admin",
+        adminRole:
+          currentAdmin.role === "support_admin"
+            ? "support_admin"
+            : currentAdmin.role === "admin"
+              ? "admin"
+              : "super_admin",
+      });
+    }
 
     await logActivity({
       admin: currentAdmin,

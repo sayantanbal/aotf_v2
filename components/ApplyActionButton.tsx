@@ -18,9 +18,16 @@ interface ApplyActionButtonProps {
   isSignedIn?: boolean;
   isEligible?: boolean;
   ineligibleLabel?: string;
+  onApplied?: () => void;
   className?: string;
   size?: "sm" | "md" | "lg";
-  color?: "default" | "primary" | "secondary" | "success" | "warning" | "danger";
+  color?:
+    | "default"
+    | "primary"
+    | "secondary"
+    | "success"
+    | "warning"
+    | "danger";
 }
 
 function getEndpoint(target: ApplyTarget, targetId: string): string {
@@ -36,6 +43,7 @@ export default function ApplyActionButton({
   isSignedIn,
   isEligible,
   ineligibleLabel = "Not eligible",
+  onApplied,
   className,
   size = "sm",
   color = "primary",
@@ -87,7 +95,9 @@ export default function ApplyActionButton({
     }
 
     if (!effectiveIsSignedIn) {
-      const redirectTo = pathname || (target === "post" ? `/posts/${targetId}` : `/jobs/${targetId}`);
+      const redirectTo =
+        pathname ||
+        (target === "post" ? `/posts/${targetId}` : `/jobs/${targetId}`);
       router.push(`/sign-in?redirect_url=${encodeURIComponent(redirectTo)}`);
       return;
     }
@@ -126,18 +136,24 @@ export default function ApplyActionButton({
         if (response.status === 409) {
           setIsApplied(true);
           addToast({
-            description: data.error || `You have already applied to this ${resourceLabel}.`,
+            description:
+              data.error ||
+              `You have already applied to this ${resourceLabel}.`,
             color: "warning",
           });
           return;
         }
 
-        throw new Error(data.error || `Failed to apply to this ${resourceLabel}.`);
+        throw new Error(
+          data.error || `Failed to apply to this ${resourceLabel}.`,
+        );
       }
 
       setIsApplied(true);
+      onApplied?.();
       addToast({
-        description: data.message || `Application submitted for this ${resourceLabel}.`,
+        description:
+          data.message || `Application submitted for this ${resourceLabel}.`,
         color: "success",
       });
       router.refresh();

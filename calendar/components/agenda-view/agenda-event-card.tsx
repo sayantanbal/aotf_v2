@@ -14,6 +14,7 @@ import type { VariantProps } from "class-variance-authority";
 type ParsedDescription = {
   headline: string;
   phone: string | null;
+  reference: string | null;
 };
 
 type ParsedTitle = {
@@ -30,7 +31,8 @@ function parseEventTitle(title: string): ParsedTitle {
 
   const rawLabel = parts[0] ?? title.trim();
   const status = parts[1] ?? null;
-  const hasLeadingSymbol = rawLabel.length > 0 && !/[A-Za-z0-9]/.test(rawLabel.charAt(0));
+  const hasLeadingSymbol =
+    rawLabel.length > 0 && !/[A-Za-z0-9]/.test(rawLabel.charAt(0));
   const emoji = hasLeadingSymbol ? rawLabel.slice(0, 2).trim() : null;
   const label = hasLeadingSymbol ? rawLabel.slice(2).trim() : rawLabel;
 
@@ -44,15 +46,27 @@ function parseEventTitle(title: string): ParsedTitle {
 function statusTone(status: string | null) {
   const value = status?.toLowerCase() ?? "";
 
-  if (value.includes("complete") || value.includes("approved") || value.includes("resolved")) {
+  if (
+    value.includes("complete") ||
+    value.includes("approved") ||
+    value.includes("resolved")
+  ) {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-900";
   }
 
-  if (value.includes("pending") || value.includes("review") || value.includes("progress")) {
+  if (
+    value.includes("pending") ||
+    value.includes("review") ||
+    value.includes("progress")
+  ) {
     return "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-900";
   }
 
-  if (value.includes("rejected") || value.includes("cancelled") || value.includes("failed")) {
+  if (
+    value.includes("rejected") ||
+    value.includes("cancelled") ||
+    value.includes("failed")
+  ) {
     return "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:ring-rose-900";
   }
 
@@ -67,6 +81,7 @@ function parseEventDescription(description: string): ParsedDescription {
 
   const headline = lines[0]?.replace(/^\[|\]$/g, "") ?? "Event details";
   let phone: string | null = null;
+  let reference: string | null = null;
 
   for (const line of lines.slice(1)) {
     const separatorIndex = line.indexOf(":");
@@ -77,10 +92,13 @@ function parseEventDescription(description: string): ParsedDescription {
       if (key.toLowerCase() === "phone") {
         phone = value;
       }
+      if (key.toLowerCase() === "post id" || key.toLowerCase() === "job id") {
+        reference = value;
+      }
     }
   }
 
-  return { headline, phone };
+  return { headline, phone, reference };
 }
 
 const agendaEventCardVariants = cva(
@@ -121,7 +139,7 @@ const agendaEventCardVariants = cva(
     defaultVariants: {
       color: "blue-dot",
     },
-  }
+  },
 );
 
 interface IProps {
@@ -199,7 +217,7 @@ export function AgendaEventCard({
                 {parsedTitle.status && (
                   <span
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${statusTone(
-                      parsedTitle.status
+                      parsedTitle.status,
                     )}`}
                   >
                     {parsedTitle.status}
@@ -239,6 +257,11 @@ export function AgendaEventCard({
                     <Phone className="size-3 shrink-0" />
                     <span className="truncate">{parsedDescription.phone}</span>
                   </a>
+                )}
+                {parsedDescription.reference && (
+                  <span className="inline-flex max-w-full items-center rounded-full border border-black/5 bg-white px-2.5 py-0.5 text-[11px] text-foreground/80 shadow-sm dark:border-white/10 dark:bg-white/5">
+                    {parsedDescription.reference}
+                  </span>
                 )}
               </div>
             </div>

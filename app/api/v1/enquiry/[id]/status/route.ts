@@ -10,6 +10,7 @@ import {
 } from "@/lib/api-utils";
 import Admin from "@/lib/models/Admin";
 import Enquiry from "@/lib/models/Enquiry";
+import { ADMIN_ROLES, type AdminRole } from "@/lib/models/EnqStatus";
 import dbConnect from "@/lib/db";
 import { updateStatusSchema, objectIdSchema } from "@/lib/validations/enquiry";
 import {
@@ -41,7 +42,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { userId } = await auth();
     if (!userId) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 },
+      );
     }
 
     // CSRF origin check
@@ -60,14 +64,30 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     await dbConnect();
     const currentAdmin = await Admin.findOne({ clerkId: userId }).lean();
     if (!currentAdmin) {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Admin access required" },
+        { status: 403 },
+      );
     }
 
     const { id } = await params;
     objectIdSchema.parse(id);
 
     const body = await request.json();
-    const input = updateStatusSchema.parse(body);
+    const parsedInput = updateStatusSchema
+      .omit({ adminId: true, adminName: true, adminRole: true })
+      .parse(body);
+    const adminRole: AdminRole = ADMIN_ROLES.includes(
+      currentAdmin.role as AdminRole,
+    )
+      ? (currentAdmin.role as AdminRole)
+      : "super_admin";
+    const input = {
+      ...parsedInput,
+      adminId: currentAdmin._id.toString(),
+      adminName: currentAdmin.name,
+      adminRole,
+    };
 
     const result = await updateEnquiryStatus(id, input);
 
