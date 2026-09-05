@@ -27,6 +27,9 @@ interface Props {
   total: number;
   postId: string;
   postLabel?: string;
+  jobLabel?: string;
+  referralPhoneNumber?: string;
+  referredJobIds?: string;
   enquiryId?: string;
   invoiceId: string;
   tutorId: string;
@@ -50,6 +53,9 @@ export function EBill({
   total,
   postId,
   postLabel = "Post ID",
+  jobLabel,
+  referralPhoneNumber,
+  referredJobIds,
   enquiryId,
   invoiceId,
   tutorName,
@@ -78,6 +84,10 @@ export function EBill({
 
         {/* ✅ NEW FIELDS */}
         <Info label={postLabel} value={postId} />
+
+        {jobLabel ? <Info label={jobLabel} value={referredJobIds || "N/A"} /> : null}
+
+        {referralPhoneNumber ? <Info label="Referral Phone" value={referralPhoneNumber} /> : null}
 
         <Info label="Enquiry ID" value={enquiryId || "-"} />
         <Info label="Tutor" value={`${tutorName}`} />

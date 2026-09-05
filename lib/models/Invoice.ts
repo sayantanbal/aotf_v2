@@ -99,6 +99,9 @@ export interface IInvoice extends Document {
   /** Teacher assigned to this tuition (snapshotted from approved application) */
   assignedTeacher?: IAssignedTeacher;
   postId?: string;
+  referredPostIds?: string[];
+  referredJobIds?: string[];
+  referralPhoneNumber?: string;
   /** Link to project (if used for project invoices) */
   projectId?: string;
   /** Reason for this revision (if version > 1) */
@@ -222,6 +225,9 @@ const InvoiceSchema = new Schema<IInvoice>(
 
     assignedTeacher: { type: AssignedTeacherSchema },
     postId: { type: String },
+    referredPostIds: { type: [String] },
+    referredJobIds: { type: [String] },
+    referralPhoneNumber: { type: String },
     projectId: { type: String },
 
     revisionReason: { type: String },

@@ -5,7 +5,14 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardBody, CardHeader, CardFooter } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@heroui/modal";
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
+} from "@heroui/modal";
 import { Select, SelectItem } from "@heroui/select";
 import { Textarea } from "@heroui/input";
 import { addToast } from "@heroui/toast";
@@ -72,7 +79,9 @@ export default function FeedbackPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
-  const [selectedFeedback, setSelectedFeedback] = useState<FeedbackData | null>(null);
+  const [selectedFeedback, setSelectedFeedback] = useState<FeedbackData | null>(
+    null,
+  );
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [adminNotes, setAdminNotes] = useState("");
   const [newStatus, setNewStatus] = useState<Status>("open");
@@ -86,20 +95,24 @@ export default function FeedbackPage() {
       const res = await fetch("/api/v1/feedback?limit=100", {
         cache: "no-store",
       });
-      
+
       const contentType = res.headers.get("content-type") ?? "";
       const isJson = contentType.includes("application/json");
-      
+
       if (!isJson) {
         const text = await res.text();
         console.error("Non-JSON response:", text);
-        throw new Error(`Server returned non-JSON response (${res.status}). Content-Type: ${contentType}`);
+        throw new Error(
+          `Server returned non-JSON response (${res.status}). Content-Type: ${contentType}`,
+        );
       }
-      
+
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.error || `Failed to fetch feedbacks (${res.status})`);
+        throw new Error(
+          data?.error || `Failed to fetch feedbacks (${res.status})`,
+        );
       }
 
       if (!data || !Array.isArray(data.feedbacks)) {
@@ -111,7 +124,9 @@ export default function FeedbackPage() {
     } catch (err) {
       reportClientError(err, { feature: "admin-feedbacks" });
       console.error("Fetch error:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch feedbacks");
+      setError(
+        err instanceof Error ? err.message : "Failed to fetch feedbacks",
+      );
     } finally {
       setLoading(false);
     }
@@ -175,10 +190,15 @@ export default function FeedbackPage() {
       const data = isJson ? await res.json() : null;
 
       if (!res.ok) {
-        throw new Error(data?.error || `Failed to update feedback (${res.status})`);
+        throw new Error(
+          data?.error || `Failed to update feedback (${res.status})`,
+        );
       }
 
-      addToast({ description: "Feedback updated successfully", color: "success" });
+      addToast({
+        description: "Feedback updated successfully",
+        color: "success",
+      });
       await fetchFeedbacks();
       handleClose();
     } catch (err) {
@@ -193,8 +213,13 @@ export default function FeedbackPage() {
     }
   };
 
-  const getCategoryColor = (category: Category): "primary" | "success" | "warning" | "danger" | "default" => {
-    const colors: Record<Category, "primary" | "success" | "warning" | "danger" | "default"> = {
+  const getCategoryColor = (
+    category: Category,
+  ): "primary" | "success" | "warning" | "danger" | "default" => {
+    const colors: Record<
+      Category,
+      "primary" | "success" | "warning" | "danger" | "default"
+    > = {
       bug: "danger",
       suggestion: "primary",
       complaint: "warning",
@@ -204,7 +229,9 @@ export default function FeedbackPage() {
     return colors[category];
   };
 
-  const getStatusColor = (status: Status): "success" | "warning" | "default" => {
+  const getStatusColor = (
+    status: Status,
+  ): "success" | "warning" | "default" => {
     const colors: Record<Status, "success" | "warning" | "default"> = {
       open: "warning",
       seen: "default",
@@ -224,7 +251,11 @@ export default function FeedbackPage() {
           <Star
             key={star}
             size={16}
-            className={star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}
+            className={
+              star <= rating
+                ? "fill-yellow-400 text-yellow-400"
+                : "text-gray-300"
+            }
           />
         ))}
       </div>
@@ -248,7 +279,7 @@ export default function FeedbackPage() {
   }
 
   return (
-    <div className="w-full space-y-6 py-4">
+    <div className="space-y-4 px-4 w-full">
       <div className="flex flex-col md:flex-row justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Feedback Management</h1>
@@ -287,11 +318,19 @@ export default function FeedbackPage() {
                     <MessageSquare className="text-primary" size={20} />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold">{feedback.userSnapshot.name}</p>
-                    <p className="text-xs text-default-500">@{feedback.userSnapshot.username}</p>
+                    <p className="text-sm font-semibold">
+                      {feedback.userSnapshot.name}
+                    </p>
+                    <p className="text-xs text-default-500">
+                      @{feedback.userSnapshot.username}
+                    </p>
                   </div>
                 </div>
-                <Chip size="sm" color={getCategoryColor(feedback.category)} variant="flat">
+                <Chip
+                  size="sm"
+                  color={getCategoryColor(feedback.category)}
+                  variant="flat"
+                >
                   {feedback.category}
                 </Chip>
               </div>
@@ -323,7 +362,11 @@ export default function FeedbackPage() {
               >
                 View Details
               </Button>
-              <Chip size="sm" color={getStatusColor(feedback.status)} variant="flat">
+              <Chip
+                size="sm"
+                color={getStatusColor(feedback.status)}
+                variant="flat"
+              >
                 {feedback.status}
               </Chip>
             </CardFooter>
@@ -341,7 +384,12 @@ export default function FeedbackPage() {
       )}
 
       {/* Feedback Detail Modal */}
-      <Modal isOpen={isOpen} onClose={handleClose} size="2xl" scrollBehavior="inside">
+      <Modal
+        isOpen={isOpen}
+        onClose={handleClose}
+        size="2xl"
+        scrollBehavior="inside"
+      >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1">
             Feedback Details
@@ -353,34 +401,46 @@ export default function FeedbackPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <User size={16} className="text-default-400" />
-                      <span className="font-semibold">{selectedFeedback.userSnapshot.name}</span>
+                      <span className="font-semibold">
+                        {selectedFeedback.userSnapshot.name}
+                      </span>
                     </div>
                     <p className="text-sm text-default-500 ml-6">
-                      @{selectedFeedback.userSnapshot.username} · {selectedFeedback.userSnapshot.role.replace("_", " ")}
+                      @{selectedFeedback.userSnapshot.username} ·{" "}
+                      {selectedFeedback.userSnapshot.role.replace("_", " ")}
                     </p>
                     <p className="text-sm text-default-500 ml-6">
                       {selectedFeedback.userSnapshot.email}
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <Chip color={getCategoryColor(selectedFeedback.category)} variant="flat">
+                    <Chip
+                      color={getCategoryColor(selectedFeedback.category)}
+                      variant="flat"
+                    >
                       {selectedFeedback.category}
                     </Chip>
-                    <Chip color={getStatusColor(selectedFeedback.status)} variant="flat">
+                    <Chip
+                      color={getStatusColor(selectedFeedback.status)}
+                      variant="flat"
+                    >
                       {selectedFeedback.status}
                     </Chip>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <p className="font-semibold text-lg">{selectedFeedback.subject}</p>
+                  <p className="font-semibold text-lg">
+                    {selectedFeedback.subject}
+                  </p>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-default-500">Rating:</span>
                     {renderStars(selectedFeedback.rating)}
                   </div>
                   <div className="flex items-center gap-2 text-sm text-default-500">
                     <Calendar size={14} />
-                    Submitted on {new Date(selectedFeedback.createdAt).toLocaleDateString()}
+                    Submitted on{" "}
+                    {new Date(selectedFeedback.createdAt).toLocaleDateString()}
                   </div>
                 </div>
 
@@ -388,22 +448,29 @@ export default function FeedbackPage() {
                   <p className="font-semibold text-sm">User Message:</p>
                   <Card className="bg-default-100">
                     <CardBody>
-                      <p className="text-sm whitespace-pre-wrap">{selectedFeedback.message}</p>
+                      <p className="text-sm whitespace-pre-wrap">
+                        {selectedFeedback.message}
+                      </p>
                     </CardBody>
                   </Card>
                 </div>
 
                 {selectedFeedback.handledAt && (
                   <div className="text-sm text-default-500">
-                    Last handled on {new Date(selectedFeedback.handledAt).toLocaleString()}
+                    Last handled on{" "}
+                    {new Date(selectedFeedback.handledAt).toLocaleString()}
                   </div>
                 )}
 
                 <div className="space-y-2">
-                  <label className="font-semibold text-sm">Update Status:</label>
+                  <label className="font-semibold text-sm">
+                    Update Status:
+                  </label>
                   <Select
                     selectedKeys={[newStatus]}
-                    onChange={(e: any) => setNewStatus(e.target.value as Status)}
+                    onChange={(e: any) =>
+                      setNewStatus(e.target.value as Status)
+                    }
                     variant="bordered"
                   >
                     <SelectItem key="open">Open</SelectItem>
@@ -429,7 +496,11 @@ export default function FeedbackPage() {
             <Button variant="flat" onPress={handleClose} isDisabled={updating}>
               Cancel
             </Button>
-            <Button color="primary" onPress={handleUpdateFeedback} isLoading={updating}>
+            <Button
+              color="primary"
+              onPress={handleUpdateFeedback}
+              isLoading={updating}
+            >
               Update Feedback
             </Button>
           </ModalFooter>

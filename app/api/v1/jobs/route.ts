@@ -10,6 +10,7 @@ import {
 } from "@/lib/api-utils";
 import Admin from "@/lib/models/Admin";
 import Source from "@/lib/models/Source";
+import Referral from "@/lib/models/Referral";
 import dbConnect from "@/lib/db";
 import { createJobSchema, listJobsSchema } from "@/lib/validations/job";
 import { sourceLists } from "@/lib/validations/forms";
@@ -78,11 +79,32 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    if (
+      input.source === "referral" &&
+      (!input.referralUserName?.trim() || !input.referralPhoneNumber?.trim())
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Referral user name and phone number are required when source is referral",
+        },
+        { status: 400 },
+      );
+    }
     const job = await createJob({
       ...input,
       createdByAdminClerkId: currentAdmin.clerkId,
       createdByAdminId: currentAdmin._id.toString(),
     });
+
+    if (input.source === "referral" && input.referralUserName?.trim()) {
+      await Referral.create({
+        postId: job.jobId,
+        referralUserName: input.referralUserName.trim(),
+        referralPhoneNumber: input.referralPhoneNumber!.trim(),
+        createdByAdminClerkId: currentAdmin.clerkId,
+      });
+    }
 
     if (input.enquiryId) {
       await updateEnquiryStatus(input.enquiryId, {

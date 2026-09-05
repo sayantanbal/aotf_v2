@@ -33,7 +33,7 @@ interface JobPostProps {
   duration?: string;
   brief?: string;
   status: "open" | "closed" | "hold" | "cancelled";
-  createdAt?: string;
+  createdAt: Date;
   initialApplied?: boolean;
   isSignedIn?: boolean;
   canApply?: boolean;
@@ -55,7 +55,7 @@ const formatStatus = (status: string) =>
   })[status] ?? status;
 
 const statusColor = (
-  status: string
+  status: string,
 ): "success" | "default" | "warning" | "danger" =>
   ({
     open: "success" as const,
@@ -69,6 +69,20 @@ const formatWorkType = (type: string) =>
 
 const formatCompanyType = (type: string) =>
   ({ individual: "Individual", company: "Company" })[type] ?? type;
+
+const getTimeAgo = (date: Date): string => {
+  const now = new Date();
+  const diffMs = now.getTime() - new Date(date).getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays > 0) return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
+  if (diffHours > 0)
+    return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
+  if (diffMins > 0) return `${diffMins} min${diffMins !== 1 ? "s" : ""} ago`;
+  return "Just now";
+};
 
 /* ---------- COMPONENT ---------- */
 
@@ -91,6 +105,7 @@ const JobPost = ({
   initialApplied = false,
   isSignedIn,
   canApply,
+  createdAt,
   applicantCount = 0,
   createdByUserId = {},
 }: JobPostProps) => {
@@ -127,7 +142,9 @@ const JobPost = ({
             alt: "Admin Avatar",
           }}
           name={createdByUserId.name || "Admin"}
-          description="Posted by admin"
+          description={
+            true ? `${getTimeAgo(createdAt)}` : `${getTimeAgo(createdAt)}`
+          }
         />
         <div className="flex items-center gap-2">
           <Chip radius="sm" size="sm" color={statusColor(status)}>

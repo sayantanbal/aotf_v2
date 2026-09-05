@@ -35,6 +35,7 @@ import {
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { z } from "zod";
 import Stepper, { Step } from "@/components/reactbits/ui/Stepper";
+import { ReferralPicker, type ReferralOption } from "@/components/admin/referral-picker";
 import {
   tuitionFormSchema,
   studentFormSchema,
@@ -193,7 +194,7 @@ function OptionManagerModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Input
                 label=""
-                placeholder={editingId ? "e.g. Mathematics" : "e.g. Sulekha"}
+                placeholder={title==="Subjects" ? "e.g. Bengali" : "e.g. Sulekha"}
                 value={form.label}
                 onChange={(e) => {
                   const label = e.target.value;
@@ -313,6 +314,7 @@ export default function TuitionPostForm({
   const [extraSubjects, setExtraSubjects] = useState<
     { _id: string; key: string; label: string }[]
   >([]);
+  const [referralOptions, setReferralOptions] = useState<ReferralOption[]>([]);
   const [isSourceManagerOpen, setIsSourceManagerOpen] = useState(false);
   const [isSubjectManagerOpen, setIsSubjectManagerOpen] = useState(false);
 
@@ -372,6 +374,25 @@ export default function TuitionPostForm({
     }
   };
 
+  const loadReferrals = async () => {
+    try {
+      const res = await fetch(`/api/v1/admin/referrals`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.referrals)) {
+        setReferralOptions(
+          data.referrals.map((referral: any) => ({
+            key: referral.key,
+            label: referral.label,
+            phone: referral.phone,
+          })),
+        );
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     if (!isEditMode || !postId) return;
     const fetchPost = async () => {
@@ -388,6 +409,7 @@ export default function TuitionPostForm({
           guardianPhone: post.guardianPhone || "",
           source: post.source || tuitionFormDefaults.source,
           referralUserName: post.referralUserName || "",
+          referralPhoneNumber: post.referralPhoneNumber || "",
           students: post.students?.length
             ? post.students.map((s: any) => ({
                 class: s.className || "",
@@ -417,6 +439,7 @@ export default function TuitionPostForm({
   useEffect(() => {
     loadSources();
     loadSubjects();
+    loadReferrals();
   }, []);
 
   // Pre-fill form data from enquiry if available (create mode only)
@@ -434,8 +457,12 @@ export default function TuitionPostForm({
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }));
     }
-    if (field === "source" && value !== "referral" && errors.referralUserName) {
-      setErrors((prev) => ({ ...prev, referralUserName: "" }));
+    if (field === "source" && value !== "referral" && (errors.referralUserName || errors.referralPhoneNumber)) {
+      setErrors((prev) => ({
+        ...prev,
+        referralUserName: "",
+        referralPhoneNumber: "",
+      }));
     }
   };
   const handleGuardianPhoneChange = (value: string) =>
@@ -505,8 +532,18 @@ export default function TuitionPostForm({
   const validate = () => {
     try {
       tuitionFormSchema.parse(formData);
-      if (formData.source === "referral" && !formData.referralUserName.trim()) {
-        setErrors({ referralUserName: "Referral user name is required" });
+      if (
+        formData.source === "referral" &&
+        (!formData.referralUserName.trim() || !formData.referralPhoneNumber.trim())
+      ) {
+        setErrors({
+          referralUserName: formData.referralUserName.trim()
+            ? ""
+            : "Referral user name is required",
+          referralPhoneNumber: formData.referralPhoneNumber.trim()
+            ? ""
+            : "Referral phone number is required",
+        });
         return false;
       }
       setErrors({});
@@ -538,15 +575,25 @@ export default function TuitionPostForm({
             guardianPhone: tuitionFormSchema.shape.guardianPhone,
             source: tuitionFormSchema.shape.source,
             referralUserName: tuitionFormSchema.shape.referralUserName,
+            referralPhoneNumber: tuitionFormSchema.shape.referralPhoneNumber,
           });
           step1Schema.parse({
             guardianName: formData.guardianName,
             guardianPhone: formData.guardianPhone,
             source: formData.source,
             referralUserName: formData.referralUserName,
+            referralPhoneNumber: formData.referralPhoneNumber,
           });
-          if (formData.source === "referral" && !formData.referralUserName.trim()) {
-            newErrors.referralUserName = "Referral user name is required";
+          if (
+            formData.source === "referral" &&
+            (!formData.referralUserName.trim() || !formData.referralPhoneNumber.trim())
+          ) {
+            if (!formData.referralUserName.trim()) {
+              newErrors.referralUserName = "Referral user name is required";
+            }
+            if (!formData.referralPhoneNumber.trim()) {
+              newErrors.referralPhoneNumber = "Referral phone number is required";
+            }
             setErrors(newErrors);
             return false;
           }
@@ -627,13 +674,18 @@ export default function TuitionPostForm({
             guardianPhone: tuitionFormSchema.shape.guardianPhone,
             source: tuitionFormSchema.shape.source,
             referralUserName: tuitionFormSchema.shape.referralUserName,
+            referralPhoneNumber: tuitionFormSchema.shape.referralPhoneNumber,
           }).parse({
             guardianName: formData.guardianName,
             guardianPhone: formData.guardianPhone,
             source: formData.source,
             referralUserName: formData.referralUserName,
+            referralPhoneNumber: formData.referralPhoneNumber,
           });
-          if (formData.source === "referral" && !formData.referralUserName.trim()) {
+          if (
+            formData.source === "referral" &&
+            (!formData.referralUserName.trim() || !formData.referralPhoneNumber.trim())
+          ) {
             return false;
           }
           break;
@@ -685,7 +737,10 @@ export default function TuitionPostForm({
         guardianPhone: formData.guardianPhone.trim(),
         source: formData.source,
         ...(formData.source === "referral" && formData.referralUserName.trim()
-          ? { referralUserName: formData.referralUserName.trim() }
+          ? {
+              referralUserName: formData.referralUserName.trim(),
+              referralPhoneNumber: formData.referralPhoneNumber.trim(),
+            }
           : {}),
         students: mappedStudents,
         classType: classTypeToApi[formData.classType] || "offline",
@@ -920,22 +975,21 @@ export default function TuitionPostForm({
                     errorMessage={errors.source}
                     variant="bordered"
                   >
-                    {[{ key: ADD_NEW_VALUE, label: "Add new option" }, ...combinedSources].map((source) => (
+                    {[{ key: ADD_NEW_VALUE, label: "➕ Add new options" }, ...combinedSources].map((source) => (
                       <SelectItem key={source.key}>{source.label}</SelectItem>
                     ))}
                   </Select>
                   {formData.source === "referral" && (
-                    <Input
-                      label="Referral User Name"
-                      placeholder="Enter referral user name"
-                      value={formData.referralUserName}
-                      onChange={(e) =>
-                        handleChange("referralUserName", e.target.value)
-                      }
+                    <ReferralPicker
+                      nameValue={formData.referralUserName}
+                      phoneValue={formData.referralPhoneNumber}
+                      options={referralOptions}
+                      onNameChange={(value) => handleChange("referralUserName", value)}
+                      onPhoneChange={(value) => handleChange("referralPhoneNumber", value)}
                       isRequired
-                      isInvalid={!!errors.referralUserName}
+                      isInvalid={!!errors.referralUserName || !!errors.referralPhoneNumber}
                       errorMessage={errors.referralUserName}
-                      variant="bordered"
+                      phoneErrorMessage={errors.referralPhoneNumber}
                       className="md:col-span-2"
                     />
                   )}
@@ -1035,7 +1089,7 @@ export default function TuitionPostForm({
                           errorMessage={errors[`students.${index}.subject`]}
                           variant="bordered"
                         >
-                          {[{ key: ADD_NEW_VALUE, label: "Add new option" }, ...combinedSubjects].map((sub) => (
+                          {[{ key: ADD_NEW_VALUE, label: "➕ Add new option" }, ...combinedSubjects].map((sub) => (
                             <AutocompleteItem key={sub.key}>
                               {sub.label}
                             </AutocompleteItem>

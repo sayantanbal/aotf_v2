@@ -79,8 +79,7 @@ export default function AdminSearchBar({
 
   // Count active filters
   const activeFilterCount =
-    Object.values(filterValues).filter(Boolean).length +
-    (searchValue ? 1 : 0);
+    Object.values(filterValues).filter(Boolean).length + (searchValue ? 1 : 0);
 
   const hasActiveFilters = activeFilterCount > 0;
 
@@ -119,7 +118,9 @@ export default function AdminSearchBar({
           placeholder={placeholder}
           value={searchValue}
           onValueChange={onSearchChange}
-          startContent={<Search size={16} className="text-default-400 shrink-0" />}
+          startContent={
+            <Search size={16} className="text-default-400 shrink-0" />
+          }
           endContent={
             searchValue ? (
               <button
@@ -136,21 +137,21 @@ export default function AdminSearchBar({
             base: "flex-1",
             inputWrapper: "h-9",
           }}
-          size="sm"
+          size="lg"
           variant="bordered"
         />
 
         {/* Filter toggle — only show when filters are configured */}
         {filters.length > 0 && (
           <Button
-            size="sm"
+            isIconOnly
+            size="lg"
             variant={showFilters ? "flat" : "bordered"}
             color={showFilters ? "primary" : "default"}
             startContent={<SlidersHorizontal size={15} />}
             onPress={() => setShowFilters((v) => !v)}
             className="relative shrink-0"
           >
-            Filters
             {Object.values(filterValues).filter(Boolean).length > 0 && (
               <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary text-white text-[10px] flex items-center justify-center">
                 {Object.values(filterValues).filter(Boolean).length}
@@ -185,7 +186,9 @@ export default function AdminSearchBar({
                   placeholder={f.placeholder ?? `All ${f.label}s`}
                   size="sm"
                   variant="bordered"
-                  selectedKeys={filterValues[f.key] ? [filterValues[f.key]] : []}
+                  selectedKeys={
+                    filterValues[f.key] ? [filterValues[f.key]] : []
+                  }
                   onChange={(e) => onFilterChange?.(f.key, e.target.value)}
                 >
                   {f.options.map((opt) => (

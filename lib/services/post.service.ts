@@ -145,24 +145,29 @@ async function attachPostAuthors<
 
 async function attachReferralDetails<
   T extends { postId: string },
->(posts: T[]): Promise<Array<T & { referralUserName: string | null }>> {
+>(posts: T[]): Promise<Array<T & { referralUserName: string | null; referralPhoneNumber: string | null }>> {
   const postIds = posts.map((post) => post.postId);
   if (postIds.length === 0) {
-    return posts.map((post) => ({ ...post, referralUserName: null }));
+    return posts.map((post) => ({
+      ...post,
+      referralUserName: null,
+      referralPhoneNumber: null,
+    }));
   }
 
   const referrals = await Referral.find(
     { postId: mongoose.trusted({ $in: postIds }) },
-    { postId: 1, referralUserName: 1 },
+    { postId: 1, referralUserName: 1, referralPhoneNumber: 1 },
   ).lean();
 
   const referralMap = new Map(
-    referrals.map((referral) => [referral.postId, referral.referralUserName]),
+    referrals.map((referral) => [referral.postId, referral]),
   );
 
   return posts.map((post) => ({
     ...post,
-    referralUserName: referralMap.get(post.postId) ?? null,
+    referralUserName: referralMap.get(post.postId)?.referralUserName ?? null,
+    referralPhoneNumber: referralMap.get(post.postId)?.referralPhoneNumber ?? null,
   }));
 }
 

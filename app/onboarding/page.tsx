@@ -633,7 +633,7 @@ export default function Onboarding() {
   }
 
   return (
-    <section className="flex flex-col items-center justify-center px-4">
+    <section className="flex flex-col items-center justify-center px-4 pb-16">
       <div className="w-full max-w-md mx-auto">
         {/* ── Payment received but onboarding not completed ────── */}
         {paymentPaidButNotOnboarded && (

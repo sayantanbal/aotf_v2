@@ -9,6 +9,7 @@ import {
   checkJsonContentType,
 } from "@/lib/api-utils";
 import Admin from "@/lib/models/Admin";
+import Referral from "@/lib/models/Referral";
 import dbConnect from "@/lib/db";
 import { updateJobSchema } from "@/lib/validations/job";
 import {
@@ -90,11 +91,37 @@ export async function PATCH(
     const { jobId } = jobIdParamSchema.parse(await params);
     const body = await request.json();
     const input = updateJobSchema.parse(body);
+    if (
+      input.source === "referral" &&
+      (!input.referralUserName?.trim() || !input.referralPhoneNumber?.trim())
+    ) {
+      return NextResponse.json(
+        { error: "Referral user name and phone number are required when source is referral" },
+        { status: 400 },
+      );
+    }
     const job = await updateJob(jobId, {
       ...input,
       updatedByAdminClerkId: currentAdmin.clerkId,
       updatedByAdminId: currentAdmin._id.toString(),
     });
+
+    if (input.source === "referral" && input.referralUserName?.trim()) {
+      await Referral.findOneAndUpdate(
+        { postId: job.jobId },
+        {
+          $set: {
+            postId: job.jobId,
+            referralUserName: input.referralUserName.trim(),
+            referralPhoneNumber: input.referralPhoneNumber!.trim(),
+            createdByAdminClerkId: currentAdmin.clerkId,
+          },
+        },
+        { upsert: true, new: true },
+      );
+    } else {
+      await Referral.deleteOne({ postId: job.jobId });
+    }
 
     await logActivity({
       admin: currentAdmin,
@@ -148,6 +175,7 @@ export async function DELETE(
 
     const { jobId } = jobIdParamSchema.parse(await params);
     await deleteJob(jobId);
+    await Referral.deleteOne({ postId: jobId });
 
     await logActivity({
       admin: currentAdmin,

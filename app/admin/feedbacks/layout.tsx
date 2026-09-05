@@ -4,7 +4,7 @@ export default function DocsLayout({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col items-center justify-center mb-15">
+    <section className="flex flex-col items-center justify-center gap-4 mb-15">
       {children}
     </section>
   );

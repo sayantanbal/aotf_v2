@@ -451,7 +451,7 @@ export default function ViewJobPostPage({
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-3 gap-2 w-full">
+            <div className="flex gap-2 w-full">
               {candidates.length > 0 && !selectionMode && (
                 <>
                   <Button

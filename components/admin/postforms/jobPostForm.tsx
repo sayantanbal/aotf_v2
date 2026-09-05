@@ -25,14 +25,15 @@ import {
 import { z } from "zod";
 import Stepper, { Step } from "@/components/reactbits/ui/Stepper";
 import { FaRupeeSign } from "react-icons/fa";
-  import {
-    Modal,
-    ModalContent,
-    ModalHeader,
-    ModalBody,
-    ModalFooter,
-  } from "@heroui/modal";
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@heroui/modal";
 import { Enquiry } from "@/components/admin/enquiries/EnquiryCard";
+import { ReferralPicker, type ReferralOption } from "@/components/admin/referral-picker";
 import {
   jobFormSchema,
   companyTypes,
@@ -53,201 +54,237 @@ import {
 
 type WorkType = "job" | "project";
 type LocationType = "on-site" | "remote" | "hybrid";
-  type OptionItem = {
-    _id: string;
-    key: string;
-    label: string;
+type OptionItem = {
+  _id: string;
+  key: string;
+  label: string;
+};
+
+const ADD_NEW_VALUE = "__add_new__";
+
+function singularizeTitle(title: string) {
+  return title.endsWith("s") ? title.slice(0, -1) : title;
+}
+
+function makeKeyFromLabel(label: string) {
+  return label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+}
+
+function OptionManagerModal({
+  title,
+  endpoint,
+  items,
+  isOpen,
+  onClose,
+  onRefresh,
+}: {
+  title: string;
+  endpoint: string;
+  items: OptionItem[];
+  isOpen: boolean;
+  onClose: () => void;
+  onRefresh: () => Promise<void>;
+}) {
+  const [form, setForm] = useState({ key: "", label: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setForm({ key: "", label: "" });
+      setEditingId(null);
+    }
+  }, [isOpen]);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm({ key: "", label: "" });
   };
 
-  const ADD_NEW_VALUE = "__add_new__";
+  const openEdit = (item: OptionItem) => {
+    setEditingId(item._id);
+    setForm({ key: item.key, label: item.label });
+  };
 
-  function singularizeTitle(title: string) {
-    return title.endsWith("s") ? title.slice(0, -1) : title;
-  }
+  const saveItem = async () => {
+    if (!form.key.trim() || !form.label.trim()) {
+      addToast({ description: "Key and label are required", color: "danger" });
+      return;
+    }
 
-  function makeKeyFromLabel(label: string) {
-    return label
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .replace(/_+/g, "_");
-  }
+    setIsSaving(true);
+    try {
+      const method = editingId ? "PATCH" : "POST";
+      const url = editingId ? `${endpoint}/${editingId}` : endpoint;
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: form.key.trim(),
+          label: form.label.trim(),
+        }),
+      });
 
-  function OptionManagerModal({
-    title,
-    endpoint,
-    items,
-    isOpen,
-    onClose,
-    onRefresh,
-  }: {
-    title: string;
-    endpoint: string;
-    items: OptionItem[];
-    isOpen: boolean;
-    onClose: () => void;
-    onRefresh: () => Promise<void>;
-  }) {
-    const [form, setForm] = useState({ key: "", label: "" });
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [isSaving, setIsSaving] = useState(false);
-
-    useEffect(() => {
-      if (!isOpen) {
-        setForm({ key: "", label: "" });
-        setEditingId(null);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          data.error || `Failed to ${editingId ? "update" : "create"} item`,
+        );
       }
-    }, [isOpen]);
 
-    const openCreate = () => {
-      setEditingId(null);
+      await onRefresh();
       setForm({ key: "", label: "" });
-    };
+      setEditingId(null);
+      addToast({
+        description: `${singularizeTitle(title)} ${editingId ? "updated" : "added"}`,
+        color: "success",
+      });
+    } catch (error) {
+      reportClientError(error, { feature: "admin-job-form" });
+      addToast({
+        description:
+          error instanceof Error
+            ? error.message
+            : `Failed to save ${title.toLowerCase()}`,
+        color: "danger",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-    const openEdit = (item: OptionItem) => {
-      setEditingId(item._id);
-      setForm({ key: item.key, label: item.label });
-    };
-
-    const saveItem = async () => {
-      if (!form.key.trim() || !form.label.trim()) {
-        addToast({ description: "Key and label are required", color: "danger" });
-        return;
+  const deleteItem = async (id: string) => {
+    if (!confirm(`Delete this ${singularizeTitle(title).toLowerCase()}?`))
+      return;
+    setIsSaving(true);
+    try {
+      const res = await fetch(`${endpoint}/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          data.error || `Failed to delete ${title.toLowerCase()}`,
+        );
       }
-
-      setIsSaving(true);
-      try {
-        const method = editingId ? "PATCH" : "POST";
-        const url = editingId ? `${endpoint}/${editingId}` : endpoint;
-        const res = await fetch(url, {
-          method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: form.key.trim(), label: form.label.trim() }),
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Failed to ${editingId ? "update" : "create"} item`);
-        }
-
-        await onRefresh();
+      await onRefresh();
+      if (editingId === id) {
         setForm({ key: "", label: "" });
         setEditingId(null);
-        addToast({
-          description: `${singularizeTitle(title)} ${editingId ? "updated" : "added"}`,
-          color: "success",
-        });
-      } catch (error) {
-      reportClientError(error, { feature: "admin-job-form" });
-        addToast({
-          description: error instanceof Error ? error.message : `Failed to save ${title.toLowerCase()}`,
-          color: "danger",
-        });
-      } finally {
-        setIsSaving(false);
       }
-    };
-
-    const deleteItem = async (id: string) => {
-      if (!confirm(`Delete this ${singularizeTitle(title).toLowerCase()}?`)) return;
-      setIsSaving(true);
-      try {
-        const res = await fetch(`${endpoint}/${id}`, { method: "DELETE" });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Failed to delete ${title.toLowerCase()}`);
-        }
-        await onRefresh();
-        if (editingId === id) {
-          setForm({ key: "", label: "" });
-          setEditingId(null);
-        }
-        addToast({
-          description: `${singularizeTitle(title)} deleted`,
-          color: "success",
-        });
-      } catch (error) {
+      addToast({
+        description: `${singularizeTitle(title)} deleted`,
+        color: "success",
+      });
+    } catch (error) {
       reportClientError(error, { feature: "admin-job-form" });
-        addToast({
-          description: error instanceof Error ? error.message : `Failed to delete ${title.toLowerCase()}`,
-          color: "danger",
-        });
-      } finally {
-        setIsSaving(false);
-      }
-    };
+      addToast({
+        description:
+          error instanceof Error
+            ? error.message
+            : `Failed to delete ${title.toLowerCase()}`,
+        color: "danger",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-    return (
-      <Modal isOpen={isOpen} onClose={onClose} size="lg">
-        <ModalContent>
-          <ModalHeader className="flex flex-col gap-1">
-            {editingId ? `Edit ${singularizeTitle(title)}` : `Add ${singularizeTitle(title)}`}
-          </ModalHeader>
-          <ModalBody>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Input
-                  label="Key"
-                  placeholder="e.g. mathematics"
-                  value={form.key}
-                  isReadOnly
-                  variant="bordered"
-                />
-                <Input
-                  label="Label"
-                  placeholder="e.g. Mathematics"
-                  value={form.label}
-                  onChange={(e) => {
-                    const label = e.target.value;
-                    setForm((prev) => ({
-                      ...prev,
-                      label,
-                      key: makeKeyFromLabel(label),
-                    }));
-                  }}
-                  variant="bordered"
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-default-700">Existing options</p>
-                <div className="space-y-2 max-h-72 overflow-auto pr-1">
-                  {items.length === 0 ? (
-                    <p className="text-sm text-default-500">No options available.</p>
-                  ) : (
-                    items.map((item) => (
-                      <div key={item._id} className="flex flex-col gap-3 rounded-lg border border-default-200 bg-default-50 p-3 md:flex-row md:items-center md:justify-between">
-                        <div>
-                          <p className="font-medium text-default-800">{item.label}</p>
-                          <p className="text-xs text-default-400">{item.key}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="flat" onPress={() => openEdit(item)} startContent={<CheckCircle size={14} />}>
-                            Edit
-                          </Button>
-                          <Button size="sm" color="danger" variant="flat" onPress={() => deleteItem(item._id)} startContent={<CheckCircle size={14} />}>
-                            Delete
-                          </Button>
-                        </div>
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} size="lg">
+      <ModalContent>
+        <ModalHeader className="flex flex-col gap-1">
+          {editingId
+            ? `Edit ${singularizeTitle(title)}`
+            : `Add ${singularizeTitle(title)}`}
+        </ModalHeader>
+        <ModalBody>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                label="Key"
+                placeholder="e.g. mathematics"
+                value={form.key}
+                isReadOnly
+                variant="bordered"
+              />
+              <Input
+                label="Label"
+                placeholder="e.g. Mathematics"
+                value={form.label}
+                onChange={(e) => {
+                  const label = e.target.value;
+                  setForm((prev) => ({
+                    ...prev,
+                    label,
+                    key: makeKeyFromLabel(label),
+                  }));
+                }}
+                variant="bordered"
+              />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-default-700">
+                Existing options
+              </p>
+              <div className="space-y-2 max-h-72 overflow-auto pr-1">
+                {items.length === 0 ? (
+                  <p className="text-sm text-default-500">
+                    No options available.
+                  </p>
+                ) : (
+                  items.map((item) => (
+                    <div
+                      key={item._id}
+                      className="flex flex-col gap-3 rounded-lg border border-default-200 bg-default-50 p-3 md:flex-row md:items-center md:justify-between"
+                    >
+                      <div>
+                        <p className="font-medium text-default-800">
+                          {item.label}
+                        </p>
+                        <p className="text-xs text-default-400">{item.key}</p>
                       </div>
-                    ))
-                  )}
-                </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          onPress={() => openEdit(item)}
+                          startContent={<CheckCircle size={14} />}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          color="danger"
+                          variant="flat"
+                          onPress={() => deleteItem(item._id)}
+                          startContent={<CheckCircle size={14} />}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="flat" onPress={onClose}>
-              Cancel
-            </Button>
-            <Button color="primary" onPress={saveItem} isLoading={isSaving}>
-              {editingId ? "Update" : "Add"}
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    );
-  }
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="flat" onPress={onClose}>
+            Cancel
+          </Button>
+          <Button color="primary" onPress={saveItem} isLoading={isSaving}>
+            {editingId ? "Update" : "Add"}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
 type GenderPreference = "male" | "female" | "both" | "all" | "others";
 type CommissionBasis = "first_month" | "project_value";
 type ProjectType = "one-time" | "ongoing";
@@ -272,7 +309,10 @@ export default function JobPostForm({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showSuccess, setShowSuccess] = useState(false);
-  const [extraSources, setExtraSources] = useState<{ _id: string; key: string; label: string }[]>([]);
+  const [extraSources, setExtraSources] = useState<
+    { _id: string; key: string; label: string }[]
+  >([]);
+  const [referralOptions, setReferralOptions] = useState<ReferralOption[]>([]);
   const [isSourceManagerOpen, setIsSourceManagerOpen] = useState(false);
 
   const combinedSources = useMemo(() => {
@@ -291,7 +331,30 @@ export default function JobPostForm({
       const data = await res.json();
       if (Array.isArray(data.sources)) {
         setExtraSources(
-          data.sources.map((s: any) => ({ _id: s._id, key: s.key, label: s.label })),
+          data.sources.map((s: any) => ({
+            _id: s._id,
+            key: s.key,
+            label: s.label,
+          })),
+        );
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const loadReferrals = async () => {
+    try {
+      const res = await fetch(`/api/v1/admin/referrals`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.referrals)) {
+        setReferralOptions(
+          data.referrals.map((referral: any) => ({
+            key: referral.key,
+            label: referral.label,
+            phone: referral.phone,
+          })),
         );
       }
     } catch {
@@ -326,7 +389,9 @@ export default function JobPostForm({
           clientName: job.clientName || "",
           clientPhone: job.phoneNumber || "",
           source: job.source || jobFormDefaults.source,
-          companyName: "",
+          referralUserName: job.referralUserName || "",
+          referralPhoneNumber: job.referralPhoneNumber || "",
+          companyName: job.companyName || "",
           companyType: job.companyType || "",
           designation: job.title || "",
           experience: job.experience || "",
@@ -335,9 +400,9 @@ export default function JobPostForm({
           genderPreference: genderReverseMap[job.gender] || "all",
           timing: job.timing || "",
           salary: job.salary || "",
-          travelRequirements: "",
+          travelRequirements: job.travelRequirements || "",
           requiredQualifications: job.requiredQualification || "",
-          skillsRequired: "",
+          skillsRequired: job.skillsRequired || "",
           notes: job.brief || "",
           commissionBasis: (job.commissionBasis ||
             "first_month") as CommissionBasis,
@@ -359,6 +424,7 @@ export default function JobPostForm({
 
   useEffect(() => {
     loadSources();
+    loadReferrals();
   }, []);
 
   // Pre-fill form data from enquiry if available (create mode only)
@@ -392,6 +458,20 @@ export default function JobPostForm({
         experience: formData.experience || undefined,
       };
       jobFormSchema.parse(dataToValidate);
+      if (
+        formData.source === "referral" &&
+        (!formData.referralUserName.trim() || !formData.referralPhoneNumber.trim())
+      ) {
+        setErrors({
+          referralUserName: formData.referralUserName.trim()
+            ? ""
+            : "Referral user name is required",
+          referralPhoneNumber: formData.referralPhoneNumber.trim()
+            ? ""
+            : "Referral phone number is required",
+        });
+        return false;
+      }
       setErrors({});
       return true;
     } catch (error) {
@@ -420,12 +500,33 @@ export default function JobPostForm({
             clientName: jobFormSchema.shape.clientName,
             clientPhone: jobFormSchema.shape.clientPhone,
             source: jobFormSchema.shape.source,
+            referralUserName: jobFormSchema.shape.referralUserName,
+            referralPhoneNumber: jobFormSchema.shape.referralPhoneNumber,
           });
           step1Schema.parse({
             clientName: formData.clientName,
             clientPhone: formData.clientPhone,
             source: formData.source,
+            referralUserName: formData.referralUserName,
+            referralPhoneNumber: formData.referralPhoneNumber,
           });
+          if (
+            formData.source === "referral" &&
+            (!formData.referralUserName.trim() || !formData.referralPhoneNumber.trim())
+          ) {
+            if (!formData.referralUserName.trim()) {
+              newErrors.referralUserName = "Referral user name is required";
+            }
+            if (!formData.referralPhoneNumber.trim()) {
+              newErrors.referralPhoneNumber = "Referral phone number is required";
+            }
+            setErrors(newErrors);
+            addToast({
+              description: "Please fill in all required fields correctly",
+              color: "danger",
+            });
+            return false;
+          }
           break;
 
         case 2: // Job Details
@@ -514,11 +615,21 @@ export default function JobPostForm({
             clientName: jobFormSchema.shape.clientName,
             clientPhone: jobFormSchema.shape.clientPhone,
             source: jobFormSchema.shape.source,
+            referralUserName: jobFormSchema.shape.referralUserName,
+            referralPhoneNumber: jobFormSchema.shape.referralPhoneNumber,
           }).parse({
             clientName: formData.clientName,
             clientPhone: formData.clientPhone,
             source: formData.source,
+            referralUserName: formData.referralUserName,
+            referralPhoneNumber: formData.referralPhoneNumber,
           });
+          if (
+            formData.source === "referral" &&
+            (!formData.referralUserName.trim() || !formData.referralPhoneNumber.trim())
+          ) {
+            return false;
+          }
           break;
         case 2:
           z.object({
@@ -590,6 +701,12 @@ export default function JobPostForm({
         clientName: formData.clientName.trim(),
         phoneNumber: formData.clientPhone.trim(),
         source: formData.source,
+        ...(formData.source === "referral" && formData.referralUserName.trim()
+          ? {
+              referralUserName: formData.referralUserName.trim(),
+              referralPhoneNumber: formData.referralPhoneNumber.trim(),
+            }
+          : {}),
         companyType: formData.companyType || "company",
         locationType: locationTypeMap[formData.locationType] || "onsite",
         location: formData.location.trim(),
@@ -597,7 +714,7 @@ export default function JobPostForm({
         commissionBasis: formData.commissionBasis,
         academyCommissionPercentage: parseInt(
           formData.academyCommissionPercentage || "0",
-          10
+          10,
         ),
         status: "open" as const,
       };
@@ -609,19 +726,13 @@ export default function JobPostForm({
       if (formData.salary?.trim()) payload.salary = formData.salary.trim();
       if (formData.requiredQualifications?.trim())
         payload.requiredQualification = formData.requiredQualifications.trim();
-
-      // Build brief from multiple text fields
-      const briefParts: string[] = [];
       if (formData.companyName?.trim())
-        briefParts.push(`Company: ${formData.companyName.trim()}`);
+        payload.companyName = formData.companyName.trim();
       if (formData.skillsRequired?.trim())
-        briefParts.push(`Skills: ${formData.skillsRequired.trim()}`);
+        payload.skillsRequired = formData.skillsRequired.trim();
       if (formData.travelRequirements?.trim())
-        briefParts.push(
-          `Travel Requirements: ${formData.travelRequirements.trim()}`
-        );
-      if (formData.notes?.trim()) briefParts.push(formData.notes.trim());
-      if (briefParts.length > 0) payload.brief = briefParts.join("\n\n");
+        payload.travelRequirements = formData.travelRequirements.trim();
+      if (formData.notes?.trim()) payload.brief = formData.notes.trim();
 
       // Project-specific fields
       if (formData.workType === "project") {
@@ -650,14 +761,14 @@ export default function JobPostForm({
           const messages = Object.entries(data.fieldErrors)
             .map(
               ([field, errors]) =>
-                `${field}: ${(errors as string[]).join(", ")}`
+                `${field}: ${(errors as string[]).join(", ")}`,
             )
             .join("; ");
           throw new Error(messages || data.error || "Validation failed");
         }
         throw new Error(
           data.error ||
-            (isEditMode ? "Failed to update job" : "Failed to create job")
+            (isEditMode ? "Failed to update job" : "Failed to create job"),
         );
       }
 
@@ -803,7 +914,11 @@ export default function JobPostForm({
                   <Select
                     label="Source"
                     placeholder="Select source"
-                    selectedKeys={formData.source ? new Set([formData.source]) : new Set<string>()}
+                    selectedKeys={
+                      formData.source
+                        ? new Set([formData.source])
+                        : new Set<string>()
+                    }
                     onSelectionChange={(keys) => {
                       const value = Array.from(keys)[0] as string | undefined;
                       if (!value) return;
@@ -818,10 +933,27 @@ export default function JobPostForm({
                     errorMessage={errors.source}
                     variant="bordered"
                   >
-                    {[{ key: ADD_NEW_VALUE, label: "Add new option" }, ...combinedSources].map((source) => (
+                    {[
+                      { key: ADD_NEW_VALUE, label: "➕ Add new options" },
+                      ...combinedSources,
+                    ].map((source) => (
                       <SelectItem key={source.key}>{source.label}</SelectItem>
                     ))}
                   </Select>
+                  {formData.source === "referral" && (
+                    <ReferralPicker
+                      nameValue={formData.referralUserName}
+                      phoneValue={formData.referralPhoneNumber}
+                      options={referralOptions}
+                      onNameChange={(value) => handleChange("referralUserName", value)}
+                      onPhoneChange={(value) => handleChange("referralPhoneNumber", value)}
+                      isRequired
+                      isInvalid={!!errors.referralUserName || !!errors.referralPhoneNumber}
+                      errorMessage={errors.referralUserName}
+                      phoneErrorMessage={errors.referralPhoneNumber}
+                      className="md:col-span-2"
+                    />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -857,7 +989,6 @@ export default function JobPostForm({
                   </Select>
                 </div>
               </div>
-
             </Step>
 
             {/* Step 2: Job Details */}
@@ -1162,7 +1293,7 @@ export default function JobPostForm({
                           onClick={() =>
                             handleChange(
                               "notes",
-                              formData.notes ? `${formData.notes}\n${s}` : s
+                              formData.notes ? `${formData.notes}\n${s}` : s,
                             )
                           }
                           className="px-2 py-0.5 text-xs rounded-full border border-default-300
@@ -1236,7 +1367,7 @@ export default function JobPostForm({
                               <span className="text-default-500">Type:</span>{" "}
                               <Chip size="sm" variant="flat" color="primary">
                                 {companyTypes.find(
-                                  (t) => t.key === formData.companyType
+                                  (t) => t.key === formData.companyType,
                                 )?.label || formData.companyType}
                               </Chip>
                             </div>
@@ -1267,7 +1398,7 @@ export default function JobPostForm({
                               </span>{" "}
                               <span className="font-medium">
                                 {experienceLevels.find(
-                                  (e) => e.key === formData.experience
+                                  (e) => e.key === formData.experience,
                                 )?.label || formData.experience}
                               </span>
                             </div>
@@ -1405,7 +1536,7 @@ export default function JobPostForm({
                             </span>{" "}
                             <Chip size="sm" variant="flat">
                               {commissionBasisTypes.find(
-                                (c) => c.key === formData.commissionBasis
+                                (c) => c.key === formData.commissionBasis,
                               )?.label || formData.commissionBasis}
                             </Chip>
                           </div>
@@ -1429,7 +1560,7 @@ export default function JobPostForm({
                                   className="capitalize"
                                 >
                                   {projectTypes.find(
-                                    (p) => p.key === formData.projectType
+                                    (p) => p.key === formData.projectType,
                                   )?.label || formData.projectType}
                                 </Chip>
                               </div>

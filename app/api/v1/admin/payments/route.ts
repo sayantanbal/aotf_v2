@@ -97,6 +97,7 @@ export async function GET(_request: NextRequest) {
           clientName: 1,
           phoneNumber: 1,
           source: 1,
+          referralUserName: 1,
           createdAt: 1,
           updatedAt: 1,
           createdByAdminId: 1,
@@ -125,6 +126,25 @@ export async function GET(_request: NextRequest) {
             tuitionPostIdSet.has(normalizePostKey(referral.postId)),
         )
         .map((referral) => [normalizePostKey(referral.postId), referral.referralUserName.trim()]),
+    );
+
+    const jobIds = jobs.map((job) => normalizePostKey(job.jobId)).filter(Boolean);
+    const jobReferrals = jobIds.length
+      ? await Referral.collection
+          .find(
+            { postId: { $in: jobIds } },
+            { projection: { postId: 1, referralUserName: 1 } },
+          )
+          .toArray()
+      : [];
+
+    const referralByJobId = new Map(
+      jobReferrals
+        .filter((referral) => referral.postId && referral.referralUserName)
+        .map((referral) => [
+          normalizePostKey(referral.postId),
+          referral.referralUserName.trim(),
+        ]),
     );
 
     const invoicePostIdSet = new Set(tuitionPostIds);
@@ -178,6 +198,10 @@ export async function GET(_request: NextRequest) {
         clientName: job.clientName,
         phoneNumber: job.phoneNumber,
         source: job.source,
+        referralUserName:
+          referralByJobId.get(normalizePostKey(job.jobId)) ??
+          job.referralUserName ??
+          null,
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,
         createdByAdminId: stringifyId(job.createdByAdminId),

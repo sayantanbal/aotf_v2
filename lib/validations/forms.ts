@@ -17,24 +17,22 @@ import { z } from "zod";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const subjects = [
-  { key: "mathematics", label: "Mathematics" },
-  { key: "physics", label: "Physics" },
-  { key: "science", label: "Science" },
-  { key: "chemistry", label: "Chemistry" },
-  { key: "biology", label: "Biology" },
-
-  { key: "english", label: "English" },
   { key: "bengali", label: "Bengali" },
-  { key: "hindi", label: "Hindi" },
+  { key: "biology", label: "Biology" },
+  { key: "chemistry", label: "Chemistry" },
+  { key: "english", label: "English" },
   { key: "french", label: "French" },
-  { key: "sanskrit", label: "Sanskrit" },
-
-  { key: "history", label: "History" },
   { key: "geography", label: "Geography" },
-  { key: "social-studies", label: "Social Studies" },
-  { key: "political-science", label: "Political Science" },
+  { key: "hindi", label: "Hindi" },
+  { key: "history", label: "History" },
+  { key: "mathematics", label: "Mathematics" },
   { key: "philosophy", label: "Philosophy" },
+  { key: "physics", label: "Physics" },
+  { key: "political-science", label: "Political Science" },
   { key: "psychology", label: "Psychology" },
+  { key: "sanskrit", label: "Sanskrit" },
+  { key: "science", label: "Science" },
+  { key: "social-studies", label: "Social Studies" },
   { key: "sociology", label: "Sociology" },
 
   { key: "computer", label: "Computer" },
@@ -231,6 +229,7 @@ export const tuitionFormDefaults: {
   guardianPhone: string;
   source: SourceKey;
   referralUserName: string;
+  referralPhoneNumber: string;
   students: { class: string; subject: string; board: string }[];
   missingSubjects: string[];
   remuneration: string;
@@ -246,6 +245,7 @@ export const tuitionFormDefaults: {
   guardianPhone: "",
   source: "just_dial",
   referralUserName: "",
+  referralPhoneNumber: "",
   students: [{ class: "", subject: "", board: "" }],
   missingSubjects: [],
   remuneration: "",
@@ -263,6 +263,8 @@ export const jobFormDefaults: {
   clientName: string;
   clientPhone: string;
   source: SourceKey;
+  referralUserName: string;
+  referralPhoneNumber: string;
   companyName: string;
   companyType: string;
   designation: string;
@@ -287,6 +289,8 @@ export const jobFormDefaults: {
   clientName: "",
   clientPhone: "",
   source: "just_dial",
+  referralUserName: "",
+  referralPhoneNumber: "",
   companyName: "",
   companyType: "",
   designation: "",
@@ -327,6 +331,7 @@ export const tuitionFormSchema = z.object({
   guardianPhone: z.string().min(1, "Phone number is required"),
   source: z.string().trim().min(1, "Source is required"),
   referralUserName: z.string().trim().optional(),
+  referralPhoneNumber: z.string().trim().optional(),
   students: z
     .array(studentFormSchema)
     .min(1, "At least one student is required"),
@@ -356,6 +361,8 @@ export const jobFormSchema = z.object({
     .regex(/^[a-zA-Z\s]+$/, "Name can only contain letters and spaces"),
   clientPhone: z.string().min(1, "Phone number is required"),
   source: z.string().trim().min(1, "Source is required"),
+  referralUserName: z.string().trim().optional(),
+  referralPhoneNumber: z.string().trim().optional(),
   companyName: z.string().optional(),
   companyType: z.enum(["individual", "company"]).optional(),
   designation: z.string().min(2, "Designation is required"),
@@ -441,26 +448,26 @@ export function yearOptions(count = 5): { key: string; label: string }[] {
 
 /** Quick-pick suggestion chips for the tuition "Additional Notes" textarea */
 export const tuitionNotesSuggestions = [
-  "School Teacher Recommended",
-  "Only Female Teacher Required",
-  "Only Male Teacher Required",
-  "Only English Communication Required",
-  "Aged & Experienced teacher required",
-  "English and Hindi communication required",
+  "School Teacher Recommended.",
+  "Only Female Teacher Required.",
+  "Only Male Teacher Required.",
+  "Only English Communication Required.",
+  "Aged & Experienced teacher required.",
+  "English and Hindi communication required.",
 ] as const;
 
 /** Quick-pick suggestion chips for the job "Additional Notes" textarea */
 export const jobNotesSuggestions = [
-  "Only Female Candidate",
-  "Only Male Candidate",
-  "Freshers Can Apply",
-  "Experienced Candidates Preferred",
-  "Immediate Joining Required",
-  "Salary Negotiable",
-  "Part-Time Available",
-  "Work From Home Option",
-  "Interview on Phone",
-  "Local Candidates Only",
+  "Only Female Candidate.",
+  "Only Male Candidate.",
+  "Freshers Can Apply.",
+  "Experienced Candidates Preferred.",
+  "Immediate Joining Required.",
+  "Salary Negotiable.",
+  "Part-Time Available.",
+  "Work From Home Option.",
+  "Interview on Phone.",
+  "Local Candidates Only.",
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────

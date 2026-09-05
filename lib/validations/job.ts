@@ -41,6 +41,8 @@ const createJobBaseSchema = z.object({
     .min(1, "Guardian phone is required"),
 
   source: z.string().trim().min(1, "Source is required"),
+  referralUserName: z.string().trim().optional(),
+  referralPhoneNumber: z.string().trim().optional(),
 
   companyType: z.enum(COMPANY_TYPES, {
     message: `Company type must be one of: ${COMPANY_TYPES.join(", ")}`,
@@ -76,6 +78,24 @@ const createJobBaseSchema = z.object({
     .string()
     .trim()
     .max(100, "Salary must be at most 100 characters")
+    .optional(),
+
+  companyName: z
+    .string()
+    .trim()
+    .max(200, "Company name must be at most 200 characters")
+    .optional(),
+
+  skillsRequired: z
+    .string()
+    .trim()
+    .max(1000, "Skills must be at most 1000 characters")
+    .optional(),
+
+  travelRequirements: z
+    .string()
+    .trim()
+    .max(500, "Travel requirements must be at most 500 characters")
     .optional(),
 
   requiredQualification: z

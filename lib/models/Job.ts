@@ -34,6 +34,8 @@ export interface IJob extends Document {
   clientName: string;
   phoneNumber: string;
   source: string;
+  referralUserName?: string;
+  companyName?: string;
   companyType: CompanyType;
   locationType: LocationType;
   location: string;
@@ -41,6 +43,8 @@ export interface IJob extends Document {
   experience?: string;
   gender: GenderPreference;
   salary?: string;
+  skillsRequired?: string;
+  travelRequirements?: string;
   requiredQualification?: string;
   projectType?: ProjectType;
   budget?: string;
@@ -74,6 +78,8 @@ const JobSchema = new Schema<IJob>(
       enum: sourceLists.map((source) => source.key),
       required: true,
     },
+    referralUserName: { type: String },
+    companyName: { type: String },
     companyType: {
       type: String,
       enum: COMPANY_TYPES,
@@ -93,6 +99,8 @@ const JobSchema = new Schema<IJob>(
       required: true,
     },
     salary: { type: String },
+    skillsRequired: { type: String },
+    travelRequirements: { type: String },
     requiredQualification: { type: String },
     projectType: {
       type: String,

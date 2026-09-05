@@ -203,7 +203,7 @@ export default function AdminReviewsPage() {
   }, [items, statusFilter]);
 
   return (
-    <div className="container mx-auto px-4 max-w-5xl space-y-3">
+    <div className="space-y-4 px-4 w-full">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-default-900">Reviews</h1>
         <Button

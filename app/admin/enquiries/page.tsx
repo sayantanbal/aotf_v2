@@ -102,7 +102,7 @@ export default function EnquiriesPage() {
   }
 
   return (
-    <div className="space-y-4 px-4  w-full">
+    <div className="space-y-4 px-4 w-full">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-default-900">Enquiries</h1>
       </div>

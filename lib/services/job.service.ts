@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import dbConnect from "@/lib/db";
 import Job, { type IJob } from "@/lib/models/Job";
 import Enquiry from "@/lib/models/Enquiry";
+import Referral from "@/lib/models/Referral";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { escapeRegex } from "@/lib/utils";
 import {
@@ -29,6 +30,8 @@ export interface PaginatedJobs {
 
 export type JobWithEnquiryReference = IJob & {
   enquiryReferenceId?: string | null;
+  referralUserName?: string | null;
+  referralPhoneNumber?: string | null;
   author?: AdminAuthorSummary | null;
 };
 
@@ -132,6 +135,34 @@ async function attachJobAuthors<
   });
 }
 
+async function attachJobReferrals<
+  T extends { jobId: string },
+>(jobs: T[]): Promise<Array<T & { referralUserName: string | null; referralPhoneNumber: string | null }>> {
+  const jobIds = jobs.map((job) => job.jobId);
+  if (jobIds.length === 0) {
+    return jobs.map((job) => ({
+      ...job,
+      referralUserName: null,
+      referralPhoneNumber: null,
+    }));
+  }
+
+  const referrals = await Referral.find(
+    { postId: mongoose.trusted({ $in: jobIds }) },
+    { postId: 1, referralUserName: 1, referralPhoneNumber: 1 },
+  ).lean();
+
+  const referralMap = new Map(
+    referrals.map((referral) => [referral.postId, referral]),
+  );
+
+  return jobs.map((job) => ({
+    ...job,
+    referralUserName: referralMap.get(job.jobId)?.referralUserName ?? null,
+    referralPhoneNumber: referralMap.get(job.jobId)?.referralPhoneNumber ?? null,
+  }));
+}
+
 // ─── Service Functions ──────────────────────────────────────────────────
 
 /**
@@ -150,6 +181,8 @@ export async function createJob(input: CreateJobInput): Promise<IJob> {
     clientName: input.clientName,
     phoneNumber: input.phoneNumber,
     source: input.source,
+    referralUserName: input.referralUserName,
+    companyName: input.companyName,
     companyType: input.companyType,
     locationType: input.locationType,
     location: input.location,
@@ -157,6 +190,8 @@ export async function createJob(input: CreateJobInput): Promise<IJob> {
     experience: input.experience,
     gender: input.gender,
     salary: input.salary,
+    skillsRequired: input.skillsRequired,
+    travelRequirements: input.travelRequirements,
     requiredQualification: input.requiredQualification,
     projectType: input.projectType,
     budget: input.budget,
@@ -191,7 +226,8 @@ export async function getJobByJobId(
   }
 
   const [jobWithEnquiryReference] = await attachEnquiryReferences([job]);
-  const [enrichedJob] = await attachJobAuthors([jobWithEnquiryReference]);
+  const [jobWithReferral] = await attachJobReferrals([jobWithEnquiryReference]);
+  const [enrichedJob] = await attachJobAuthors([jobWithReferral]);
   return enrichedJob;
 }
 
@@ -207,7 +243,8 @@ export async function getJobById(id: string): Promise<JobWithEnquiryReference> {
   }
 
   const [jobWithEnquiryReference] = await attachEnquiryReferences([job]);
-  const [enrichedJob] = await attachJobAuthors([jobWithEnquiryReference]);
+  const [jobWithReferral] = await attachJobReferrals([jobWithEnquiryReference]);
+  const [enrichedJob] = await attachJobAuthors([jobWithReferral]);
   return enrichedJob;
 }
 
@@ -249,7 +286,8 @@ export async function listJobs(input: ListJobsInput): Promise<PaginatedJobs> {
   ]);
 
   const jobsWithEnquiryReferences = await attachEnquiryReferences(jobs);
-  const enrichedJobs = await attachJobAuthors(jobsWithEnquiryReferences);
+  const jobsWithReferrals = await attachJobReferrals(jobsWithEnquiryReferences);
+  const enrichedJobs = await attachJobAuthors(jobsWithReferrals);
 
   return {
     jobs: enrichedJobs,

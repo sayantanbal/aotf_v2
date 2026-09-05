@@ -275,7 +275,7 @@ const TuitionPost = ({
       case "auto_declined":
         return {
           label:
-            "Application auto-declined, someone above you in the application queue was selected",
+            "Application auto-declined, someone above you in the application queue was selected.",
           subLabel: null,
           color:
             "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/30",

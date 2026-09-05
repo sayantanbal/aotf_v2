@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint --fix",
-    "delete:clerk-users": "tsx scripts/delete-all-clerk-users.ts",
+    "delete-all": "tsx scripts/delete-all-clerk-users.ts --yes",
+    "migrate": "node scripts/migrate-teachers-to-clerk.mjs --live",
     "create:admin": "tsx scripts/create-admin.ts",
     "sync:clerk-users": "tsx scripts/sync-clerk-users-to-mongodb.ts",
     "test:sheets": "tsx scripts/test-sheets.ts",
@@ -16,6 +17,7 @@
     "ship:zip": "mkdir -p package && rm -f package/aotf_v2.zip && zip -r package/aotf_v2.zip . -x 'node_modules/*' '.git/*' '.next/*' 'package/*' '*.zip'"
   },
   "dependencies": {
+    "@clerk/backend": "^3.17.1",
     "@clerk/nextjs": "^6.39.0",
     "@heroui/accordion": "2.2.26",
     "@heroui/alert": "2.2.29",

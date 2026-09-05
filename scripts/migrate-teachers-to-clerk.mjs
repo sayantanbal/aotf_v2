@@ -41,7 +41,9 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { resolve, dirname } from "path";
 import dns from "node:dns/promises";
+import legacyTeacherMapping from "./lib/legacy-teacher-mapping.js";
 
+const { mapLegacyTeacherToProfile } = legacyTeacherMapping;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -267,7 +269,18 @@ async function migrate() {
         results.created++;
       }
 
-      const seedResult = await seedClerkUserInMongo(newDb, clerkUser);
+      const legacyProfilePatch = mapLegacyTeacherToProfile(
+        teacher,
+        clerkUser.id,
+        clerkUser.username ?? undefined,
+      );
+
+      // const seedResult = await seedClerkUserInMongo(newDb, clerkUser);
+      const seedResult = await seedClerkUserInMongo(newDb, clerkUser, {
+        ...teacher,
+        ...legacyProfilePatch,
+      });
+
       if (seedResult.action !== "skipped") {
         results.seeded++;
         log("🗄️ ", `MongoDB ${seedResult.action}: ${email} (${clerkUser.id})`);

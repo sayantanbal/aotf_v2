@@ -3,6 +3,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Admin from "@/lib/models/Admin";
+import Referral from "@/lib/models/Referral";
 import Post from "@/lib/models/Post";
 import Invoice from "@/lib/models/Invoice";
 import { siteConfig } from "@/config/site";
@@ -27,6 +28,16 @@ async function getCallerAdmin(userId: string) {
 
   await dbConnect();
   return Admin.findOne({ clerkId: userId }, { role: 1 }).lean();
+}
+
+function slugifyInvoiceSegment(value: string) {
+  const slug = value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug.slice(0, 12) || "REF";
 }
 
 /** POST /api/v1/admin/payments/generate-payout
@@ -54,11 +65,148 @@ export async function POST(request: NextRequest) {
       adminClerkId?: string;
       year?: unknown;
       month?: unknown;
+      referralUserName?: string;
+      referralPhoneNumber?: string;
+      amount?: unknown;
     };
 
     const { adminClerkId } = body;
     const year = Number(body.year);
     const month = Number(body.month); // 1-indexed
+    const referralUserName = body.referralUserName?.trim() ?? "";
+    const referralPhoneNumber = body.referralPhoneNumber?.trim() ?? "";
+    const manualAmount = Number(body.amount);
+
+    const isReferralInvoice = Boolean(referralUserName);
+
+    if (!year || !month || month < 1 || month > 12) {
+      return NextResponse.json(
+        { error: "Valid year and month (1-12) are required" },
+        { status: 400 },
+      );
+    }
+
+    if (isReferralInvoice) {
+      if (!referralPhoneNumber) {
+        return NextResponse.json(
+          { error: "Referral phone number is required" },
+          { status: 400 },
+        );
+      }
+      if (!manualAmount || manualAmount <= 0) {
+        return NextResponse.json(
+          { error: "A valid invoice amount is required" },
+          { status: 400 },
+        );
+      }
+
+      await dbConnect();
+
+      const referralDocs = await Referral.find(
+        {
+          referralUserName,
+          referralPhoneNumber,
+        },
+        { postId: 1, referralUserName: 1, referralPhoneNumber: 1 },
+      ).lean();
+
+      const referredPostIds = referralDocs
+        .map((referral) => referral.postId?.trim())
+        .filter((postId): postId is string => Boolean(postId && !postId.startsWith("J-")));
+      const referredJobIds = referralDocs
+        .map((referral) => referral.postId?.trim())
+        .filter((postId): postId is string => Boolean(postId && postId.startsWith("J-")));
+
+      const amount = Math.round(manualAmount * 100) / 100;
+      const shortId = slugifyInvoiceSegment(
+        `${referralUserName}-${referralPhoneNumber}`,
+      );
+      const mm = String(month).padStart(2, "0");
+      const invoiceId = `INV-REF-${shortId}-${mm}-${year}`;
+
+      const monthNames = [
+        "January","February","March","April","May","June",
+        "July","August","September","October","November","December",
+      ];
+      const periodLabel = `${monthNames[month - 1]} ${year}`;
+
+      const updateData = {
+        $set: {
+          invoiceId,
+          version: 1,
+          isLatest: true,
+
+          source: {
+            name: siteConfig.name ?? "Academy of Tutorials & Freelancers",
+            address: siteConfig.contact?.address?.street ?? "",
+            phone: siteConfig.contact?.phone ?? "",
+            email: siteConfig.contact?.email ?? "",
+          },
+
+          recipient: {
+            name: referralUserName,
+            phone: referralPhoneNumber,
+            email: "",
+          },
+
+          serviceProvider: {
+            name: siteConfig.name ?? "Academy of Tutorials & Freelancers",
+            address: siteConfig.contact?.address?.street ?? "",
+            phone: siteConfig.contact?.phone ?? "",
+            websiteUrl: siteConfig.url ?? "https://www.aotf.in",
+            signatureUrl: "/api/v1/admin/private-image?name=sign.png",
+          },
+
+          amount: {
+            currency: "INR",
+            subTotal: amount,
+            taxPercentage: 0,
+            taxAmount: 0,
+            grandTotal: amount,
+          },
+
+          breakdown: {
+            items: [
+              {
+                name: `Referral Payout — ${referralUserName}`,
+                description: `Referral invoice for ${periodLabel} at a manual amount`,
+                quantity: 1,
+                unitAmount: amount,
+                total: amount,
+              },
+            ],
+            notes: `Referral invoice for ${periodLabel}.`,
+          },
+
+          paymentStatus: "unpaid",
+          referralPhoneNumber,
+          referredPostIds,
+          referredJobIds,
+        },
+        $setOnInsert: {
+          invoiceDate: new Date(),
+        },
+      };
+
+      const invoice = await Invoice.findOneAndUpdate(
+        { invoiceId },
+        updateData,
+        { new: true, upsert: true, setDefaultsOnInsert: true },
+      );
+
+      return NextResponse.json(
+        {
+          success: true,
+          invoiceId: invoice.invoiceId,
+          grandTotal: amount,
+          referralUserName,
+          referralPhoneNumber,
+          referredPostIds,
+          referredJobIds,
+        },
+        { status: 201 },
+      );
+    }
 
     if (!adminClerkId || typeof adminClerkId !== "string") {
       return NextResponse.json(

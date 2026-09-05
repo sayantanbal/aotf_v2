@@ -487,12 +487,12 @@ export default function UsersPage() {
         }}
       />
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex justify-between items-center gap-2">
         <Select
           label="Status"
           placeholder="Filter by status"
           selectedKeys={[statusFilter]}
-          className="max-w-56"
+          className="max-w-full"
           size="sm"
           variant="bordered"
           onSelectionChange={(keys) => {
@@ -502,12 +502,11 @@ export default function UsersPage() {
         >
           <SelectItem key="all">All statuses</SelectItem>
           <SelectItem key="active">Active</SelectItem>
-          <SelectItem key="blocked">Blocked</SelectItem>
           <SelectItem key="deleted">Deleted</SelectItem>
         </Select>
         <Button
           isIconOnly
-          size="md"
+          size="lg"
           variant="flat"
           color="primary"
           startContent={<RefreshCw size={16} />}
@@ -516,18 +515,15 @@ export default function UsersPage() {
         />
       </div>
 
-      <div className="flex flex-wrap gap-2 text-xs text-default-500">
+      <div className="flex gap-2 text-xs text-default-500 ">
         <span className="rounded-full bg-default-100 px-3 py-1">
           {tabSummary.total} {selectedTab}s
         </span>
         <span className="rounded-full bg-default-100 px-3 py-1">
-          {summary?.active ?? 0} active (all)
+          {summary?.active ?? 0} active
         </span>
         <span className="rounded-full bg-default-100 px-3 py-1">
-          {summary?.blocked ?? 0} blocked (all)
-        </span>
-        <span className="rounded-full bg-default-100 px-3 py-1">
-          {summary?.deleted ?? 0} deleted (all)
+          {summary?.deleted ?? 0} deleted
         </span>
       </div>
 
@@ -690,43 +686,6 @@ export default function UsersPage() {
                 >
                   View Profile
                 </Button>
-              </CardFooter>
-              <CardFooter className="gap-2 pt-0">
-                {user.statusValue === "active" ? (
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    color="warning"
-                    startContent={<Ban size={16} />}
-                    className="flex-1"
-                    isLoading={actioningId === user.id}
-                    onPress={() => void handleStatusChange(user.id, "blocked")}
-                  >
-                    Block
-                  </Button>
-                ) : user.statusValue === "blocked" ? (
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    color="success"
-                    startContent={<BadgeCheck size={16} />}
-                    className="flex-1"
-                    isLoading={actioningId === user.id}
-                    onPress={() => void handleStatusChange(user.id, "active")}
-                  >
-                    Unblock
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    className="flex-1"
-                    isDisabled
-                  >
-                    Deleted
-                  </Button>
-                )}
-
                 {user.statusValue !== "deleted" ? (
                   <Button
                     size="sm"
@@ -747,7 +706,8 @@ export default function UsersPage() {
                     Delete
                   </Button>
                 ) : null}
-
+              </CardFooter>
+              <CardFooter className="gap-2 pt-0">
                 {!user.paymentCompleted && user.statusValue !== "deleted" ? (
                   <Button
                     size="sm"

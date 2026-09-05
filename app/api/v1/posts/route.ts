@@ -79,9 +79,15 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    if (input.source === "referral" && !input.referralUserName?.trim()) {
+    if (
+      input.source === "referral" &&
+      (!input.referralUserName?.trim() || !input.referralPhoneNumber?.trim())
+    ) {
       return NextResponse.json(
-        { error: "Referral user name is required when source is referral" },
+        {
+          error:
+            "Referral user name and phone number are required when source is referral",
+        },
         { status: 400 },
       );
     }
@@ -110,6 +116,7 @@ export async function POST(request: NextRequest) {
       await Referral.create({
         postId: post.postId,
         referralUserName: input.referralUserName.trim(),
+        referralPhoneNumber: input.referralPhoneNumber!.trim(),
         createdByAdminClerkId: currentAdmin.clerkId,
       });
     }

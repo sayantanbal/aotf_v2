@@ -22,17 +22,29 @@ export default async function InvoicePage({ params }: Props) {
   const totalQty = invoiceDoc.breakdown.items.reduce((sum: number, item: any) => sum + item.quantity, 0);
 
   const isPayoutInvoice = invoiceDoc.invoiceId.startsWith("INV-PAYOUT-");
+  const isReferralInvoice = invoiceDoc.invoiceId.startsWith("INV-REF-");
 
   // For payout invoices: show count. For regular invoices: show the postId.
   const postIdValue = isPayoutInvoice
     ? String(invoiceDoc.breakdown.items.length)
-    : invoiceDoc.postId || "N/A";
+    : isReferralInvoice
+      ? (invoiceDoc.referredPostIds?.length ? invoiceDoc.referredPostIds.join(", ") : "N/A")
+      : invoiceDoc.postId || "N/A";
 
-  const postIdLabel = isPayoutInvoice ? "Paid Posts" : "Post ID";
+  const postIdLabel = isPayoutInvoice ? "Paid Posts" : isReferralInvoice ? "Referred Posts" : "Post ID";
+  const jobIdValue = isReferralInvoice
+    ? (invoiceDoc.referredJobIds?.length ? invoiceDoc.referredJobIds.join(", ") : "N/A")
+    : "N/A";
 
   const mappedInvoice = {
     orderNumber: invoiceDoc.invoiceId,
-    orderType: isPayoutInvoice ? "Remuneration" : invoiceDoc.postId ? "Online Tuition" : "Service",
+    orderType: isPayoutInvoice
+      ? "Remuneration"
+      : isReferralInvoice
+        ? "Referrel"
+        : invoiceDoc.postId
+          ? "Online Tuition"
+          : "Service",
     amount: invoiceDoc.amount.grandTotal,
     date: invoiceDoc.invoiceDate,
 
@@ -55,6 +67,8 @@ export default async function InvoicePage({ params }: Props) {
     total: invoiceDoc.amount.grandTotal,
 
     postId: postIdValue,
+    referralPhoneNumber: invoiceDoc.referralPhoneNumber || "N/A",
+    referredJobIds: jobIdValue,
 
     enquiryId: undefined,
     invoiceId: invoiceDoc.invoiceId,
@@ -65,7 +79,7 @@ export default async function InvoicePage({ params }: Props) {
 
   return (
     <div className="mb-20">
-      <EBill {...mappedInvoice} postLabel={postIdLabel} />
+      <EBill {...mappedInvoice} postLabel={postIdLabel} jobLabel={isReferralInvoice ? "Referred Jobs" : undefined} />
 
     </div>
   );

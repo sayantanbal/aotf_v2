@@ -15,7 +15,7 @@ export default function BottomNav() {
   const router = useRouter();
   const { user, isSignedIn } = useUser();
   const username = user?.username?.trim();
-  const profilePath = username ? `/u/${username}` : "/dashboard";
+  const dashboardPath = username ? `/u/${username}/dashboard` : "/";
 
   // ❌ Hide navbar on /admin
   if (pathname.startsWith("/admin")) return null;
@@ -25,7 +25,7 @@ export default function BottomNav() {
     { icon: GraduationCap, label: "Tuitions", path: "/posts" },
     { icon: BriefcaseBusiness, label: "Jobs", path: "/jobs" },
     isSignedIn
-      ? { icon: User, label: "Profile", path: profilePath }
+      ? { icon: User, label: "Dashboard", path: dashboardPath }
       : { icon: MailQuestionMark, label: "Enquiry", path: "/enquiry" },
   ];
 

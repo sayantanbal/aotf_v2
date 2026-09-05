@@ -1,12 +1,17 @@
+import legacyTeacherMapping from "./legacy-teacher-mapping.js";
+
+const { mapLegacyTeacherToProfile, mapLegacyTeacherToOnboarding } = legacyTeacherMapping;
+
 /**
  * Seeds User + Profile (+ OnboardingDetails for migrated users) in the NEW
  * MongoDB from a Clerk user object. Mirrors app/api/v1/webhooks/clerk/route.ts.
  *
  * @param {import("mongodb").Db} db
  * @param {import("@clerk/backend").User} clerkUser
+ * @param {Record<string, any> | null} [legacyTeacher]
  * @returns {Promise<{ action: "created" | "updated" | "skipped"; reason?: string }>}
  */
-export async function seedClerkUserInMongo(db, clerkUser) {
+export async function seedClerkUserInMongo(db, clerkUser, legacyTeacher = null) {
   const metadata = clerkUser.publicMetadata ?? {};
 
   if (metadata.isAdmin === true) {
@@ -55,25 +60,38 @@ export async function seedClerkUserInMongo(db, clerkUser) {
     $or: [{ clerkId }, { username }],
   });
 
+  const isMigratedLegacy =
+    metadata.migratedFromLegacy === true &&
+    metadata.registrationFeeStatus === "paid";
+
   let action = "updated";
 
   if (userDoc) {
-    await usersCol.updateOne(
-      { _id: userDoc._id },
-      { $set: { clerkId, status: "active", updatedAt: now } },
-    );
+    const userUpdate = {
+      clerkId,
+      status: "active",
+      updatedAt: now,
+      onboardingCompleted: isMigratedLegacy ? true : metadata.onboardingCompleted === true,
+      role,
+      "plan.current": isMigratedLegacy ? (legacyPlan ?? planCurrent) : planCurrent,
+      "plan.hasTuitionAccess": isMigratedLegacy ? true : false,
+      "plan.hasCandidateAccess": false,
+      "plan.activatedAt": isMigratedLegacy ? now : userDoc.plan?.activatedAt ?? null,
+    };
+
+    await usersCol.updateOne({ _id: userDoc._id }, { $set: userUpdate });
   } else {
     const insertResult = await usersCol.insertOne({
       clerkId,
       username,
       role,
       plan: {
-        current: planCurrent,
-        hasTuitionAccess: false,
+        current: isMigratedLegacy ? (legacyPlan ?? planCurrent) : planCurrent,
+        hasTuitionAccess: isMigratedLegacy ? true : false,
         hasCandidateAccess: false,
-        activatedAt: null,
+        activatedAt: isMigratedLegacy ? now : null,
       },
-      onboardingCompleted: metadata.onboardingCompleted === true,
+      onboardingCompleted: isMigratedLegacy ? true : metadata.onboardingCompleted === true,
       status: "active",
       registrationPaymentId: null,
       deletionWarningEmailSentAt: null,
@@ -84,6 +102,29 @@ export async function seedClerkUserInMongo(db, clerkUser) {
     action = "created";
   }
 
+  const profileDefaults = {
+    displayName: accountHolderName,
+    bio: null,
+    avatarUrl,
+    location: null,
+    websiteUrl: null,
+    socialLinks: {},
+    subjects: [],
+    experience: null,
+    isPublic: true,
+    phone: null,
+    whatsapp: null,
+    address: null,
+    teachingExp: null,
+    jobExp: null,
+    qualification: null,
+    board: null,
+  };
+
+  const legacyProfilePatch = legacyTeacher
+    ? mapLegacyTeacherToProfile(legacyTeacher, clerkId, username)
+    : {};
+
   const profileDoc = await profilesCol.findOne({
     $or: [{ clerkId }, { username }],
   });
@@ -92,9 +133,14 @@ export async function seedClerkUserInMongo(db, clerkUser) {
     const profileUpdate = {
       clerkId,
       userId: userDoc._id,
+      username,
       updatedAt: now,
+      ...profileDefaults,
+      ...legacyProfilePatch,
     };
-    if (avatarUrl) profileUpdate.avatarUrl = avatarUrl;
+    if (avatarUrl && !legacyProfilePatch.avatarUrl) {
+      profileUpdate.avatarUrl = avatarUrl;
+    }
     if (!profileDoc.displayName && accountHolderName) {
       profileUpdate.displayName = accountHolderName;
     }
@@ -104,15 +150,15 @@ export async function seedClerkUserInMongo(db, clerkUser) {
       userId: userDoc._id,
       clerkId,
       username,
-      displayName: accountHolderName,
-      bio: null,
-      avatarUrl,
-      location: null,
-      websiteUrl: null,
-      socialLinks: {},
-      subjects: [],
-      experience: null,
-      isPublic: true,
+      ...profileDefaults,
+      ...legacyProfilePatch,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  if (isMigratedLegacy) {
+    const onboardingDefaults = {
       phone: null,
       whatsapp: null,
       address: null,
@@ -120,32 +166,26 @@ export async function seedClerkUserInMongo(db, clerkUser) {
       jobExp: null,
       qualification: null,
       board: null,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
+      plan: legacyPlan ?? planCurrent,
+      status: "incomplete",
+      expiresAt: null,
+    };
 
-  const isMigratedLegacy =
-    metadata.migratedFromLegacy === true &&
-    metadata.registrationFeeStatus === "paid";
+    const onboardingPatch = legacyTeacher
+      ? mapLegacyTeacherToOnboarding(legacyTeacher)
+      : {};
 
-  if (isMigratedLegacy) {
     await onboardingCol.updateOne(
       { $or: [{ clerkId }, { userId: userDoc._id }] },
       {
-        $set: { clerkId, updatedAt: now },
-        $setOnInsert: {
+        $set: {
+          ...onboardingDefaults,
+          ...onboardingPatch,
           userId: userDoc._id,
-          phone: null,
-          whatsapp: null,
-          address: null,
-          teachingExp: null,
-          jobExp: null,
-          qualification: null,
-          board: null,
-          plan: legacyPlan ?? planCurrent,
-          status: "incomplete",
-          expiresAt: null,
+          clerkId,
+          updatedAt: now,
+        },
+        $setOnInsert: {
           createdAt: now,
         },
       },

@@ -72,6 +72,7 @@ type JobRow = {
   clientName: string;
   phoneNumber: string;
   source?: string;
+  referralUserName?: string | null;
   createdAt: string;
   updatedAt: string;
   createdByAdminId?: string;
@@ -85,6 +86,13 @@ type SummaryResponse = {
   admins: AdminRow[];
   tuitionPosts: TuitionPostRow[];
   jobs: JobRow[];
+};
+
+type ReferralOption = {
+  key: string;
+  label: string;
+  phone: string;
+  count: number;
 };
 
 function parseDate(value?: string | Date | null) {
@@ -125,6 +133,11 @@ export default function PaymentDashboard() {
   const [selectedSourceKey, setSelectedSourceKey] = useState<string>(
     sourceLists[0]?.key ?? "other",
   );
+  const [selectedReferralKey, setSelectedReferralKey] = useState<string>("all");
+  const [selectedReferralName, setSelectedReferralName] = useState<string>("all");
+  const [selectedReferralPhone, setSelectedReferralPhone] = useState<string>("");
+  const [referralOptions, setReferralOptions] = useState<ReferralOption[]>([]);
+  const [referralInvoiceAmount, setReferralInvoiceAmount] = useState<string>("");
   const [dueDateDrafts, setDueDateDrafts] = useState<Record<string, string>>(
     {},
   );
@@ -134,6 +147,8 @@ export default function PaymentDashboard() {
   const [savingPct, setSavingPct] = useState(false);
   const [generatingPayout, setGeneratingPayout] = useState(false);
   const [payoutLink, setPayoutLink] = useState<string | null>(null);
+  const [generatingReferralInvoice, setGeneratingReferralInvoice] = useState(false);
+  const [referralInvoiceLink, setReferralInvoiceLink] = useState<string | null>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -167,8 +182,27 @@ export default function PaymentDashboard() {
     }
   };
 
+  const fetchReferralOptions = async () => {
+    try {
+      const response = await fetch("/api/v1/admin/referrals", {
+        credentials: "include",
+      });
+      const payload = (await response.json()) as {
+        referrals?: ReferralOption[];
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to load referrals");
+      }
+      setReferralOptions(Array.isArray(payload.referrals) ? payload.referrals : []);
+    } catch (err) {
+      reportClientError(err, { feature: "admin-referrals-list" });
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchReferralOptions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -176,6 +210,19 @@ export default function PaymentDashboard() {
   useEffect(() => {
     setPayoutLink(null);
   }, [selectedAdminKey, selectedYear, selectedMonth]);
+
+  useEffect(() => {
+    setReferralInvoiceLink(null);
+    setReferralInvoiceAmount("");
+  }, [selectedReferralKey, selectedSourceKey, selectedYear, selectedMonth]);
+
+  useEffect(() => {
+    if (selectedSourceKey !== "referral") {
+      setSelectedReferralKey("all");
+      setSelectedReferralName("all");
+      setSelectedReferralPhone("");
+    }
+  }, [selectedSourceKey]);
 
   // Sync draft pct from loaded data
   useEffect(() => {
@@ -250,6 +297,32 @@ export default function PaymentDashboard() {
     return stats;
   }, [filteredTuitionPosts, filteredJobs]);
 
+  const selectedSourceTuitionPosts = useMemo(() => {
+    if (selectedSourceKey === "all") return filteredTuitionPosts;
+    const sourceFiltered = filteredTuitionPosts.filter(
+      (post) => (post.source || "other") === selectedSourceKey,
+    );
+    if (selectedSourceKey !== "referral" || selectedReferralName === "all") {
+      return sourceFiltered;
+    }
+    return sourceFiltered.filter(
+      (post) => (post.referralUserName ?? "").trim() === selectedReferralName,
+    );
+  }, [filteredTuitionPosts, selectedReferralName, selectedSourceKey]);
+
+  const selectedSourceJobs = useMemo(() => {
+    if (selectedSourceKey === "all") return filteredJobs;
+    const sourceFiltered = filteredJobs.filter(
+      (job) => (job.source || "other") === selectedSourceKey,
+    );
+    if (selectedSourceKey !== "referral" || selectedReferralName === "all") {
+      return sourceFiltered;
+    }
+    return sourceFiltered.filter(
+      (job) => (job.referralUserName ?? "").trim() === selectedReferralName,
+    );
+  }, [filteredJobs, selectedReferralName, selectedSourceKey]);
+
   const selectedSourceStats = useMemo(() => {
     if (selectedSourceKey === "all") {
       let tuitionCount = 0;
@@ -261,24 +334,29 @@ export default function PaymentDashboard() {
       return { tuitionCount, jobCount };
     }
 
+    if (selectedSourceKey === "referral" && selectedReferralName !== "all") {
+      return {
+        tuitionCount: selectedSourceTuitionPosts.length,
+        jobCount: selectedSourceJobs.length,
+      };
+    }
+
     return (
       sourceStats.get(selectedSourceKey) ?? { tuitionCount: 0, jobCount: 0 }
     );
-  }, [selectedSourceKey, sourceStats]);
+  }, [
+    selectedReferralName,
+    selectedSourceJobs.length,
+    selectedSourceKey,
+    selectedSourceTuitionPosts.length,
+    sourceStats,
+  ]);
 
-  const selectedSourceTuitionPosts = useMemo(() => {
-    if (selectedSourceKey === "all") return filteredTuitionPosts;
-    return filteredTuitionPosts.filter(
-      (post) => (post.source || "other") === selectedSourceKey,
-    );
-  }, [filteredTuitionPosts, selectedSourceKey]);
-
-  const selectedSourceJobs = useMemo(() => {
-    if (selectedSourceKey === "all") return filteredJobs;
-    return filteredJobs.filter(
-      (job) => (job.source || "other") === selectedSourceKey,
-    );
-  }, [filteredJobs, selectedSourceKey]);
+  useEffect(() => {
+    if (selectedSourceKey !== "referral") {
+      setSelectedReferralName("all");
+    }
+  }, [selectedSourceKey]);
 
   const postStatusCounts = useMemo(() => {
     const paidTuition = filteredTuitionPosts.filter(
@@ -570,6 +648,57 @@ export default function PaymentDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAdminKey, selectedYear, selectedMonth]);
 
+  const generateReferralInvoice = useCallback(async () => {
+    if (selectedSourceKey !== "referral" || selectedReferralName === "all") {
+      return;
+    }
+
+    const amount = Number(referralInvoiceAmount);
+    if (Number.isNaN(amount) || amount <= 0) {
+      addToast({ description: "Enter a valid invoice amount", color: "warning" });
+      return;
+    }
+
+    setGeneratingReferralInvoice(true);
+    setReferralInvoiceLink(null);
+    try {
+      const res = await fetch("/api/v1/admin/payments/generate-payout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          referralUserName: selectedReferralName,
+          referralPhoneNumber: selectedReferralPhone,
+          amount,
+          year: Number(selectedYear),
+          month: Number(selectedMonth),
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload.error || "Failed to generate referral invoice");
+      }
+      const link = `${window.location.origin}/invoices/${payload.invoiceId}`;
+      setReferralInvoiceLink(link);
+      addToast({ description: "Referral invoice generated!", color: "success" });
+    } catch (err) {
+      reportClientError(err, { feature: "admin-referral-invoice" });
+      addToast({
+        description:
+          err instanceof Error ? err.message : "Failed to generate referral invoice",
+        color: "danger",
+      });
+    } finally {
+      setGeneratingReferralInvoice(false);
+    }
+  }, [
+    referralInvoiceAmount,
+    selectedReferralName,
+    selectedReferralPhone,
+    selectedSourceKey,
+    selectedYear,
+    selectedMonth,
+  ]);
+
   // Render helpers
   const renderAdminsTab = () => (
     <div className="space-y-2">
@@ -652,7 +781,7 @@ export default function PaymentDashboard() {
         <CardBody className="space-y-3 px-1 pt-0 sm:px-4 sm:pb-4">
           {/* ── Payout Calculator Section ───────────────────────────── */}
           {selectedAdminKey && selectedAdminKey !== "all" && (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50/30 p-3 space-y-3">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-linear-to-br from-slate-50 to-indigo-50/30 p-3 space-y-3">
               <div className="flex items-center gap-2">
                 <Percent size={14} className="text-indigo-600" />
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -670,7 +799,7 @@ export default function PaymentDashboard() {
                   max={100}
                   step={0.5}
                   variant="bordered"
-                  className="max-w-[140px]"
+                  className="max-w-35"
                   value={payoutPctDraft[selectedAdminKey] ?? "0"}
                   onValueChange={(v) =>
                     setPayoutPctDraft((prev) => ({
@@ -851,6 +980,13 @@ export default function PaymentDashboard() {
                           <span>{job.status ?? "Open"}</span>
                           <span>{formatPhone(job.phoneNumber)}</span>
                         </div>
+                        {job.referralUserName ? (
+                          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
+                            <span>Referral</span>
+                            <span className="h-1 w-1 rounded-full bg-amber-400" />
+                            <span>{job.referralUserName}</span>
+                          </div>
+                        ) : null}
                       </div>
                     ))
                   ) : (
@@ -891,6 +1027,140 @@ export default function PaymentDashboard() {
           {sourceSelectItems}
         </Select>
       </div>
+
+      {selectedSourceKey === "referral" && (
+        <div className="max-w-md">
+          <Select
+            label="Referrer"
+            size="sm"
+            selectedKeys={
+              selectedReferralKey
+                ? new Set([selectedReferralKey])
+                : new Set<string>()
+            }
+            onSelectionChange={(keys) => {
+              const value = Array.from(keys)[0] as string | undefined;
+              if (!value || value === "all") {
+                setSelectedReferralKey("all");
+                setSelectedReferralName("all");
+                setSelectedReferralPhone("");
+                return;
+              }
+
+              const referral = referralOptions.find((item) => item.key === value);
+              setSelectedReferralKey(value);
+              setSelectedReferralName(referral?.label ?? "all");
+              setSelectedReferralPhone(referral?.phone ?? "");
+            }}
+            className="min-w-0"
+            variant="bordered"
+          >
+            <SelectItem key="all">All referrers</SelectItem>
+            {referralOptions.map((referral) => (
+              <SelectItem key={referral.key}>
+                {referral.label} • {referral.phone} ({referral.count})
+              </SelectItem>
+            ))}
+          </Select>
+        </div>
+      )}
+
+      {selectedSourceKey === "referral" && selectedReferralName !== "all" && (
+        <Card className="border border-dashed border-slate-200 bg-linear-to-br from-slate-50 to-indigo-50/25 shadow-none max-w-md">
+          <CardBody className="space-y-3 p-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Referral Invoice
+              </p>
+              <p className="text-sm font-medium text-slate-900">
+                {selectedReferralName}
+              </p>
+              {selectedReferralPhone ? (
+                <p className="text-[11px] text-slate-500">
+                  {formatPhone(selectedReferralPhone)}
+                </p>
+              ) : null}
+              <p className="text-[11px] text-slate-500">
+                Enter the amount you want to invoice for this referrer.
+              </p>
+            </div>
+
+            <div className="flex items-end gap-2">
+              <Input
+                label="Invoice amount"
+                size="sm"
+                type="number"
+                min={0}
+                step={0.01}
+                variant="bordered"
+                className="max-w-35"
+                value={referralInvoiceAmount}
+                onValueChange={setReferralInvoiceAmount}
+                endContent={<span className="text-xs text-slate-400">₹</span>}
+              />
+              <Button
+                size="sm"
+                color="secondary"
+                variant="solid"
+                startContent={<ReceiptText size={14} />}
+                isLoading={generatingReferralInvoice}
+                onPress={generateReferralInvoice}
+              >
+                Generate Invoice
+              </Button>
+            </div>
+
+            {referralInvoiceLink && (
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 space-y-2">
+                <p className="text-[11px] font-semibold text-indigo-700 uppercase tracking-wide">
+                  Shareable invoice link
+                </p>
+                <p className="break-all text-[11px] font-mono text-indigo-900">
+                  {referralInvoiceLink}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="secondary"
+                    startContent={<Copy size={12} />}
+                    onPress={() => {
+                      navigator.clipboard.writeText(referralInvoiceLink);
+                      addToast({ description: "Link copied!", color: "success" });
+                    }}
+                  >
+                    Copy link
+                  </Button>
+                  <Button
+                    as={Link}
+                    href={referralInvoiceLink}
+                    target="_blank"
+                    size="sm"
+                    variant="flat"
+                    color="primary"
+                    startContent={<ExternalLink size={12} />}
+                  >
+                    Open
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="solid"
+                    color="success"
+                    className="text-white"
+                    startContent={<MessageCircle size={12} />}
+                    onPress={() => {
+                      const msg = `Here is your referral invoice for ${monthLabel(selectedKey)}:\n${window.location.origin}${referralInvoiceLink}`;
+                      shareOnWhatsApp(msg);
+                    }}
+                  >
+                    Share on WhatsApp
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
       <Card className="border border-slate-200/70 shadow-none">
         <CardHeader className="flex items-start justify-between gap-2 px-2.5 py-2 sm:px-4 sm:py-3">
@@ -1010,6 +1280,13 @@ export default function PaymentDashboard() {
                         {/* <span>{job.status ?? "Open"}</span> */}
                         <span>{formatPhone(job.phoneNumber)}</span>
                       </div>
+                      {job.referralUserName ? (
+                        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
+                          <span>Referral</span>
+                          <span className="h-1 w-1 rounded-full bg-amber-400" />
+                          <span>{job.referralUserName}</span>
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 ) : (

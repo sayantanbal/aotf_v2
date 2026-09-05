@@ -39,6 +39,7 @@ export const createPostSchema = z.object({
 
   source: z.string().trim().min(1, "Source is required"),
   referralUserName: z.string().trim().optional(),
+  referralPhoneNumber: z.string().trim().optional(),
 
   paymentstatus: z.enum(["done", "pending"]).optional(),
   paymentDate: z.string().optional(),

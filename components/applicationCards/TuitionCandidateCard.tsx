@@ -163,7 +163,7 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
                   className="text-default-400 shrink-0"
                 />
                 <span className="font-medium text-default-700 truncate">
-                  {candidate.teachingExp?.trim() || "N/A"}
+                  {candidate.teachingExp?.trim() || "N/A"} {candidate.teachingExp?.trim() ? "yrs exp" : ""}
                 </span>
               </div>
             </div>

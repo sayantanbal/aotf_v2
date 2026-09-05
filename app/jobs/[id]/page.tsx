@@ -8,10 +8,12 @@ import {
   FaUserAlt,
   FaBuilding,
   FaBriefcase,
+  FaSuitcase,
 } from "react-icons/fa";
 import { BsCurrencyRupee } from "react-icons/bs";
-import { FaClock } from "react-icons/fa6";
-import { MdOutlineWifiTethering, MdOutlineStorefront } from "react-icons/md";
+import { FaClock, FaCode } from "react-icons/fa6";
+import { MdOutlineWifiTethering, MdOutlineStorefront, MdCardTravel } from "react-icons/md";
+import { TbReportMoney } from "react-icons/tb";
 import ApplyActionButton from "@/components/ApplyActionButton";
 import BackButton from "@/components/BackButton";
 import { getJobByJobId } from "@/lib/services/job.service";
@@ -80,6 +82,33 @@ const getWorkTypeIcon = (type: string) => {
   }
 };
 
+const formatCommissionBasis = (basis: string) => {
+  switch (basis) {
+    case "first_month":
+      return "First Month Salary";
+    case "project_value":
+      return "Project Value";
+    default:
+      return basis;
+  }
+};
+
+const formatSource = (source: string) =>
+  source.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+/* ─── Reusable row ────────────────────────────────────────────── */
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
+      <span className="text-gray-500 dark:text-gray-400 text-sm">{label}</span>
+      <span className="text-gray-900 dark:text-white font-medium text-sm text-right max-w-[60%]">
+        {value}
+      </span>
+    </div>
+  );
+}
+
 /* ─── Page ────────────────────────────────────────────────────── */
 
 export default async function JobDetailPage({
@@ -101,14 +130,17 @@ export default async function JobDetailPage({
   const locationInfo = getLocationIcon(job.locationType);
   const workTypeInfo = getWorkTypeIcon(job.workType);
 
-  const companyTypeLabel =
-    job.companyType === "individual" ? "Individual" : "Company";
+  const companyTypeLabel = job.companyType === "individual" ? "Individual" : "Company";
+  const genderLabel =
+    job.gender === "all" || job.gender === "both"
+      ? "All Genders"
+      : `${job.gender.charAt(0).toUpperCase() + job.gender.slice(1)} Only`;
 
   return (
-    <div className="w-full max-w-xl p-2 space-y-4">
+    <div className="w-full max-w-xl p-2 space-y-4 mb-10">
       <BackButton title="Job Details" />
 
-      {/* Job Header */}
+      {/* ── Job Header ─────────────────────────────────────────── */}
       <div>
         <div className="mb-4 flex items-center justify-between rounded-xl border bg-background px-4 py-3 shadow-sm">
           <User
@@ -117,7 +149,6 @@ export default async function JobDetailPage({
               alt: "Admin Avatar",
             }}
             name={job.author?.name ?? "Admin"}
-            description="Posted by admin"
           />
           <div
             className={`flex h-7 items-center justify-center px-3 rounded-full ${statusBadge.bg} border ${statusBadge.border}`}
@@ -130,19 +161,14 @@ export default async function JobDetailPage({
           </div>
         </div>
 
-        <div className="flex justify-between items-center mb-3">
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium tracking-wide">
-            Job ID: #{job.jobId}
-          </p>
-        </div>
-
         <h1 className="text-gray-900 dark:text-white text-[28px] font-bold leading-[1.2] mb-1">
-          {job.title}
+          Role: {job.title}
         </h1>
         <p className="text-gray-500 dark:text-gray-400 text-base font-medium mb-3">
-          {job.clientName} · {companyTypeLabel}
+          {job.companyName ? `${job.companyName} · ` : "asche na "}{companyTypeLabel}
         </p>
 
+        {/* Salary / Budget */}
         {(isProject ? job.budget : job.salary) && (
           <div className="flex items-baseline gap-2 mb-4">
             <h2 className="text-primary text-[26px] font-bold tracking-tight truncate max-w-full">
@@ -157,7 +183,7 @@ export default async function JobDetailPage({
         )}
       </div>
 
-      {/* Info Cards */}
+      {/* ── Quick-glance icon cards ─────────────────────────────── */}
       <div className="grid grid-cols-3 gap-4">
         <Card className="p-2 justify-center items-center">
           <CardHeader className="justify-center p-1">
@@ -175,93 +201,136 @@ export default async function JobDetailPage({
           <CardHeader className="justify-center p-1">
             <FaClock size={30} className="text-primary" />
           </CardHeader>
-          <p className="text-sm text-center">{job.timing}</p>
+          <p className="text-sm text-center">{job.timing ?? "—"}</p>
         </Card>
       </div>
 
-      {/* Qualification / Brief Note */}
+      {/* ── Qualification / Brief highlight boxes ──────────────── */}
       {(job.requiredQualification || job.brief) && (
-        <div className="my-4">
-          <div className="flex gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 p-2 rounded-lg">
-            <LuNotebookText
-              className="text-amber-600 dark:text-amber-400 shrink-0"
-              size={35}
-            />
-            <div className="flex flex-col justify-center">
-              <p className="text-md font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wide mb-0.5">
-                {isProject ? "Project Brief" : "Required Qualification"}
-              </p>
-              <p className="text-xs text-amber-900 dark:text-amber-200 leading-relaxed font-medium">
-                {isProject ? job.brief : job.requiredQualification}
-              </p>
+        <div className="space-y-3">
+          {job.requiredQualification && (
+            <div className="flex gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 p-3 rounded-lg">
+              <LuNotebookText
+                className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
+                size={32}
+              />
+              <div className="flex flex-col justify-center">
+                <p className="text-sm font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wide mb-0.5">
+                  Required Qualification
+                </p>
+                <p className="text-xs text-amber-900 dark:text-amber-200 leading-relaxed font-medium whitespace-pre-wrap">
+                  {job.requiredQualification}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
+          {job.brief && (
+            <div className="flex gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 p-3 rounded-lg">
+              <LuNotebookText
+                className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5"
+                size={32}
+              />
+              <div className="flex flex-col justify-center">
+                <p className="text-sm font-bold text-blue-800 dark:text-blue-400 uppercase tracking-wide mb-0.5">
+                  {isProject ? "Project Brief" : "Additional Notes"}
+                </p>
+                <p className="text-xs text-blue-900 dark:text-blue-200 leading-relaxed font-medium whitespace-pre-wrap">
+                  {job.brief}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Job Details Card */}
+      {/* ── Job Details Card ────────────────────────────────────── */}
       <Card className="w-full p-4">
         <CardHeader className="p-0">
-          <FaUserAlt size={24} className="text-primary inline-block mr-2" />
+          <FaUserAlt size={22} className="text-primary inline-block mr-2" />
           <h3 className="text-lg font-bold">Job Details</h3>
         </CardHeader>
-        <div className="mt-3 px-3 space-y-3">
-          {job.experience && (
-            <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
-              <span className="text-gray-500 dark:text-gray-400 text-sm">
-                Experience
-              </span>
-              <span className="text-gray-900 dark:text-white font-medium text-sm text-right">
-                {job.experience}
-              </span>
-            </div>
+        <div className="mt-3 px-1 space-y-3">
+          <DetailRow label="Job ID" value={`# ${job.jobId}`} />
+          <DetailRow label="Work Type" value={workTypeInfo.label} />
+          {job.companyName && <DetailRow label="Company" value={job.companyName} />}
+          <DetailRow label="Company Type" value={companyTypeLabel} />
+          {job.experience && <DetailRow label="Experience" value={job.experience} />}
+          <DetailRow label="Gender Preference" value={genderLabel} />
+          {job.timing && <DetailRow label="Working Hours" value={job.timing} />}
+          {!isProject && job.salary && (
+            <DetailRow label="Salary" value={job.salary} />
           )}
-          <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
-            <span className="text-gray-500 dark:text-gray-400 text-sm">
-              Gender
-            </span>
-            <span className="text-gray-900 dark:text-white font-medium text-sm text-right capitalize">
-              {job.gender === "all" || job.gender === "both"
-                ? "All genders"
-                : `${job.gender} only`}
-            </span>
-          </div>
-          <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
-            <span className="text-gray-500 dark:text-gray-400 text-sm">
-              Working Hours
-            </span>
-            <span className="text-gray-900 dark:text-white font-medium text-sm text-right">
-              {job.timing}
-            </span>
-          </div>
+          {isProject && job.budget && (
+            <DetailRow label="Budget" value={job.budget} />
+          )}
+          {isProject && job.duration && (
+            <DetailRow label="Duration" value={job.duration} />
+          )}
           {isProject && job.projectType && (
-            <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
-              <span className="text-gray-500 dark:text-gray-400 text-sm">
-                Project Type
-              </span>
-              <span className="text-gray-900 dark:text-white font-medium text-sm text-right capitalize">
-                {job.projectType}
-              </span>
-            </div>
+            <DetailRow label="Project Type" value={<span className="capitalize">{job.projectType}</span>} />
           )}
         </div>
       </Card>
 
-      {/* Location Card */}
+      {/* ── Commission Details Card ─────────────────────────────── */}
+      <Card className="w-full p-4">
+        <CardHeader className="p-0">
+          <TbReportMoney size={26} className="text-primary inline-block mr-2" />
+          <h3 className="text-lg font-bold">Commission Info</h3>
+        </CardHeader>
+        <div className="mt-3 px-1 space-y-3">
+          <DetailRow
+            label="Commission Basis"
+            value={formatCommissionBasis(job.commissionBasis)}
+          />
+          <DetailRow
+            label="Academy Commission"
+            value={`${job.academyCommissionPercentage}%`}
+          />
+        </div>
+      </Card>
+
+      {/* ── Skills Required Card ────────────────────────────────── */}
+      {job.skillsRequired && (
+        <Card className="w-full p-4">
+          <CardHeader className="p-0">
+            <FaCode size={22} className="text-primary inline-block mr-2" />
+            <h3 className="text-lg font-bold">Skills Required</h3>
+          </CardHeader>
+          <p className="mt-3 px-1 text-sm font-medium text-slate-600 dark:text-slate-100 leading-relaxed whitespace-pre-wrap">
+            {job.skillsRequired}
+          </p>
+        </Card>
+      )}
+
+      {/* ── Travel Requirements Card ────────────────────────────── */}
+      {job.travelRequirements && (
+        <Card className="w-full p-4">
+          <CardHeader className="p-0">
+            <MdCardTravel size={26} className="text-primary inline-block mr-2" />
+            <h3 className="text-lg font-bold">Travel Requirements</h3>
+          </CardHeader>
+          <p className="mt-3 px-1 text-sm font-medium text-slate-600 dark:text-slate-100 leading-relaxed">
+            {job.travelRequirements}
+          </p>
+        </Card>
+      )}
+
+      {/* ── Location Card ───────────────────────────────────────── */}
       <Card className="w-full p-4">
         <CardHeader className="p-0">
           <FaMapMarkerAlt
-            size={28}
+            size={26}
             className="text-primary inline-block mr-2"
           />
           <h3 className="text-lg font-bold">Location</h3>
         </CardHeader>
-        <p className="mt-3 px-3 text-md font-medium text-slate-600 dark:text-slate-100 leading-snug">
+        <p className="mt-3 px-1 text-md font-medium text-slate-600 dark:text-slate-100 leading-snug">
           {job.location}
         </p>
       </Card>
 
-      {/* Action Buttons */}
+      {/* ── Action Buttons ──────────────────────────────────────── */}
       <div className="flex gap-4 max-w-xl mx-auto z-10">
         <Button className="w-full" size="lg">
           <SlShare size={18} className="inline-block mr-2" />

@@ -9,6 +9,7 @@ import {
   checkJsonContentType,
 } from "@/lib/api-utils";
 import Admin from "@/lib/models/Admin";
+import Referral from "@/lib/models/Referral";
 import dbConnect from "@/lib/db";
 import { updatePostSchema } from "@/lib/validations/post";
 import {
@@ -97,10 +98,36 @@ export async function PATCH(
     const { postId } = postIdParamSchema.parse(await params);
     const body = await request.json();
     const input = updatePostSchema.parse(body);
+    if (
+      input.source === "referral" &&
+      (!input.referralUserName?.trim() || !input.referralPhoneNumber?.trim())
+    ) {
+      return NextResponse.json(
+        { error: "Referral user name and phone number are required when source is referral" },
+        { status: 400 },
+      );
+    }
     const post = await updatePost(postId, {
       ...input,
       updatedByAdminClerkId: currentAdmin.clerkId,
     });
+
+    if (input.source === "referral" && input.referralUserName?.trim()) {
+      await Referral.findOneAndUpdate(
+        { postId: post.postId },
+        {
+          $set: {
+            postId: post.postId,
+            referralUserName: input.referralUserName.trim(),
+            referralPhoneNumber: input.referralPhoneNumber!.trim(),
+            createdByAdminClerkId: currentAdmin.clerkId,
+          },
+        },
+        { upsert: true, new: true },
+      );
+    } else {
+      await Referral.deleteOne({ postId: post.postId });
+    }
 
     await upsertPostLedger(postId);
 
@@ -165,6 +192,7 @@ export async function DELETE(
 
     const { postId } = postIdParamSchema.parse(await params);
     await deletePost(postId);
+    await Referral.deleteOne({ postId });
 
     await logActivity({
       admin: currentAdmin,
