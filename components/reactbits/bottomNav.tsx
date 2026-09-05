@@ -6,7 +6,7 @@ import {
   Home,
   GraduationCap,
   BriefcaseBusiness,
-  User,
+  LayoutDashboard,
   MailQuestionMark,
 } from "lucide-react";
 
@@ -25,7 +25,7 @@ export default function BottomNav() {
     { icon: GraduationCap, label: "Tuitions", path: "/posts" },
     { icon: BriefcaseBusiness, label: "Jobs", path: "/jobs" },
     isSignedIn
-      ? { icon: User, label: "Dashboard", path: dashboardPath }
+      ? { icon: LayoutDashboard, label: "Dashboard", path: dashboardPath }
       : { icon: MailQuestionMark, label: "Enquiry", path: "/enquiry" },
   ];
 

@@ -131,6 +131,7 @@ export default async function JobDetailPage({
   const workTypeInfo = getWorkTypeIcon(job.workType);
 
   const companyTypeLabel = job.companyType === "individual" ? "Individual" : "Company";
+  const displayCompanyName = job.companyName || (job.companyType === "company" ? job.clientName : null);
   const genderLabel =
     job.gender === "all" || job.gender === "both"
       ? "All Genders"
@@ -165,7 +166,7 @@ export default async function JobDetailPage({
           Role: {job.title}
         </h1>
         <p className="text-gray-500 dark:text-gray-400 text-base font-medium mb-3">
-          {job.companyName ? `${job.companyName} · ` : "asche na "}{companyTypeLabel}
+          {displayCompanyName ? `${displayCompanyName} · ` : ""}{companyTypeLabel}
         </p>
 
         {/* Salary / Budget */}
@@ -252,7 +253,8 @@ export default async function JobDetailPage({
         <div className="mt-3 px-1 space-y-3">
           <DetailRow label="Job ID" value={`# ${job.jobId}`} />
           <DetailRow label="Work Type" value={workTypeInfo.label} />
-          {job.companyName && <DetailRow label="Company" value={job.companyName} />}
+          <DetailRow label="Client Name" value={job.clientName} />
+          {displayCompanyName && <DetailRow label="Company" value={displayCompanyName} />}
           <DetailRow label="Company Type" value={companyTypeLabel} />
           {job.experience && <DetailRow label="Experience" value={job.experience} />}
           <DetailRow label="Gender Preference" value={genderLabel} />

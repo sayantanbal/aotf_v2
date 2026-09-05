@@ -201,4 +201,16 @@ if (!Job.schema.path("updatedByAdminId")) {
   });
 }
 
+if (!Job.schema.path("companyName")) {
+  Job.schema.add({ companyName: { type: String } });
+}
+
+if (!Job.schema.path("skillsRequired")) {
+  Job.schema.add({ skillsRequired: { type: String } });
+}
+
+if (!Job.schema.path("travelRequirements")) {
+  Job.schema.add({ travelRequirements: { type: String } });
+}
+
 export default Job;
