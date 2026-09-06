@@ -1388,14 +1388,15 @@ export default function PaymentDashboard() {
 
     return (
       <div className="space-y-2.5">
-        <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-2.5 py-2">
+        <div className="flex justify-center rounded-2xl bg-slate-50 p-2">
           <Tabs
             aria-label="Post payment status"
             color="primary"
             selectedKey={postStatusTab}
             variant="underlined"
             onSelectionChange={(key) => setPostStatusTab(key as PostStatusTabKey)}
-            classNames={{ tabList: "gap-2", cursor: "w-full" }}
+            classNames={{ tabList: "gap-2 w-full", cursor: "w-full" }}
+            style={{ width: "100%" }}
           >
             <Tab
               key="paid"
