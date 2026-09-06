@@ -32,6 +32,7 @@ import AdminSearchBar from "@/components/admin/ui/AdminSearchBar";
 import { reportClientError } from "@/lib/client-report-error";
 import { formatPhone } from "@/lib/utils/phone";
 import { Chip } from "@heroui/chip";
+import { Spinner } from "@heroui/spinner";
 
 type Role = "teacher" | "candidate";
 type Status = "all" | "active" | "blocked" | "deleted";
@@ -509,8 +510,7 @@ export default function UsersPage() {
           size="lg"
           variant="flat"
           color="primary"
-          startContent={<RefreshCw size={16} />}
-          isLoading={isRefreshing}
+          startContent={isRefreshing ? <Spinner size="sm" /> : <RefreshCw size={16} />}
           onPress={() => void loadBundle(true, true)}
         />
       </div>

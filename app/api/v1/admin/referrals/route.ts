@@ -40,17 +40,20 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  await dbConnect();
+
   const referrals = await Referral.find(
     {},
     { referralUserName: 1, referralPhoneNumber: 1 },
   ).lean();
+
   const counts = new Map<string, { label: string; phone: string; count: number }>();
 
   for (const referral of referrals) {
     const name = referral.referralUserName?.trim();
-    const phone = referral.referralPhoneNumber?.trim();
-    if (!name || !phone) continue;
-    const key = `${name}||${phone}`;
+    const phone = referral.referralPhoneNumber?.trim() || "";
+    if (!name) continue;
+    const key = phone ? `${name}||${phone}` : name;
     counts.set(key, {
       label: name,
       phone,
@@ -59,7 +62,7 @@ export async function GET() {
   }
 
   const options = Array.from(counts.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([, a], [, b]) => a.label.localeCompare(b.label))
     .map(([key, value]) => ({ key, ...value }));
 
   return NextResponse.json({ referrals: options });

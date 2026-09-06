@@ -111,6 +111,18 @@ function formatDate(value?: string | Date | null) {
   });
 }
 
+function isTuitionPaid(post: TuitionPostRow) {
+  return (
+    post.paymentstatus === "done" ||
+    post.invoicePaymentStatus === "paid" ||
+    post.invoicePaymentStatus === "partial"
+  );
+}
+
+function isJobPaid(job: JobRow) {
+  return Boolean(job.invoiceGenerated);
+}
+
 function monthLabel(value: string) {
   const [year, month] = value.split("-");
   const monthIndex = Number(month) - 1;
@@ -134,21 +146,29 @@ export default function PaymentDashboard() {
     sourceLists[0]?.key ?? "other",
   );
   const [selectedReferralKey, setSelectedReferralKey] = useState<string>("all");
-  const [selectedReferralName, setSelectedReferralName] = useState<string>("all");
-  const [selectedReferralPhone, setSelectedReferralPhone] = useState<string>("");
+  const [selectedReferralName, setSelectedReferralName] =
+    useState<string>("all");
+  const [selectedReferralPhone, setSelectedReferralPhone] =
+    useState<string>("");
   const [referralOptions, setReferralOptions] = useState<ReferralOption[]>([]);
-  const [referralInvoiceAmount, setReferralInvoiceAmount] = useState<string>("");
+  const [referralInvoiceAmount, setReferralInvoiceAmount] =
+    useState<string>("");
   const [dueDateDrafts, setDueDateDrafts] = useState<Record<string, string>>(
     {},
   );
 
   // ── Payout state ────────────────────────────────────────────────────────
-  const [payoutPctDraft, setPayoutPctDraft] = useState<Record<string, string>>({});
+  const [payoutPctDraft, setPayoutPctDraft] = useState<Record<string, string>>(
+    {},
+  );
   const [savingPct, setSavingPct] = useState(false);
   const [generatingPayout, setGeneratingPayout] = useState(false);
   const [payoutLink, setPayoutLink] = useState<string | null>(null);
-  const [generatingReferralInvoice, setGeneratingReferralInvoice] = useState(false);
-  const [referralInvoiceLink, setReferralInvoiceLink] = useState<string | null>(null);
+  const [generatingReferralInvoice, setGeneratingReferralInvoice] =
+    useState(false);
+  const [referralInvoiceLink, setReferralInvoiceLink] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     const now = new Date();
@@ -194,7 +214,9 @@ export default function PaymentDashboard() {
       if (!response.ok) {
         throw new Error(payload.error || "Failed to load referrals");
       }
-      setReferralOptions(Array.isArray(payload.referrals) ? payload.referrals : []);
+      setReferralOptions(
+        Array.isArray(payload.referrals) ? payload.referrals : [],
+      );
     } catch (err) {
       reportClientError(err, { feature: "admin-referrals-list" });
     }
@@ -359,13 +381,9 @@ export default function PaymentDashboard() {
   }, [selectedSourceKey]);
 
   const postStatusCounts = useMemo(() => {
-    const paidTuition = filteredTuitionPosts.filter(
-      (post) => post.paymentstatus === "done",
-    ).length;
+    const paidTuition = filteredTuitionPosts.filter(isTuitionPaid).length;
     const unpaidTuition = filteredTuitionPosts.length - paidTuition;
-    const paidJobs = filteredJobs.filter((job) =>
-      Boolean(job.invoiceGenerated),
-    ).length;
+    const paidJobs = filteredJobs.filter(isJobPaid).length;
     const unpaidJobs = filteredJobs.length - paidJobs;
 
     return {
@@ -401,7 +419,7 @@ export default function PaymentDashboard() {
         (job) =>
           job.createdByAdminId &&
           data.admins.find((a) => a.id === job.createdByAdminId)?.clerkId ===
-            admin.clerkId,
+          admin.clerkId,
       );
 
       return {
@@ -530,6 +548,18 @@ export default function PaymentDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceLists]);
 
+  const referralSelectData = useMemo(() => {
+    return [
+      { key: "all", label: "All referrers", phone: "", isAll: true },
+      ...referralOptions.map((r) => ({
+        key: r.key,
+        label: r.label,
+        phone: r.phone,
+        isAll: false,
+      })),
+    ];
+  }, [referralOptions]);
+
   const savePostPayment = async (
     post: TuitionPostRow,
     nextStatus: "done" | "pending",
@@ -585,14 +615,11 @@ export default function PaymentDashboard() {
       }
       setSavingPct(true);
       try {
-        const res = await fetch(
-          "/api/v1/admin/payments/payout-percentage",
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ adminClerkId, percentage: pct }),
-          },
-        );
+        const res = await fetch("/api/v1/admin/payments/payout-percentage", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adminClerkId, percentage: pct }),
+        });
         const payload = await res.json();
         if (!res.ok) throw new Error(payload.error || "Failed to save");
         addToast({ description: "Payout percentage saved", color: "success" });
@@ -618,20 +645,18 @@ export default function PaymentDashboard() {
     setGeneratingPayout(true);
     setPayoutLink(null);
     try {
-      const res = await fetch(
-        "/api/v1/admin/payments/generate-payout",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            adminClerkId: selectedAdminKey,
-            year: Number(selectedYear),
-            month: Number(selectedMonth),
-          }),
-        },
-      );
+      const res = await fetch("/api/v1/admin/payments/generate-payout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adminClerkId: selectedAdminKey,
+          year: Number(selectedYear),
+          month: Number(selectedMonth),
+        }),
+      });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error || "Failed to generate payout");
+      if (!res.ok)
+        throw new Error(payload.error || "Failed to generate payout");
       const link = `${window.location.origin}/invoices/${payload.invoiceId}`;
       setPayoutLink(link);
       addToast({ description: "Payout invoice generated!", color: "success" });
@@ -655,7 +680,10 @@ export default function PaymentDashboard() {
 
     const amount = Number(referralInvoiceAmount);
     if (Number.isNaN(amount) || amount <= 0) {
-      addToast({ description: "Enter a valid invoice amount", color: "warning" });
+      addToast({
+        description: "Enter a valid invoice amount",
+        color: "warning",
+      });
       return;
     }
 
@@ -679,12 +707,17 @@ export default function PaymentDashboard() {
       }
       const link = `${window.location.origin}/invoices/${payload.invoiceId}`;
       setReferralInvoiceLink(link);
-      addToast({ description: "Referral invoice generated!", color: "success" });
+      addToast({
+        description: "Referral invoice generated!",
+        color: "success",
+      });
     } catch (err) {
       reportClientError(err, { feature: "admin-referral-invoice" });
       addToast({
         description:
-          err instanceof Error ? err.message : "Failed to generate referral invoice",
+          err instanceof Error
+            ? err.message
+            : "Failed to generate referral invoice",
         color: "danger",
       });
     } finally {
@@ -807,9 +840,7 @@ export default function PaymentDashboard() {
                       [selectedAdminKey]: v,
                     }))
                   }
-                  endContent={
-                    <span className="text-xs text-slate-400">%</span>
-                  }
+                  endContent={<span className="text-xs text-slate-400">%</span>}
                 />
                 <Button
                   size="sm"
@@ -825,7 +856,10 @@ export default function PaymentDashboard() {
               {/* Live calculation preview */}
               <div className="rounded-xl bg-white px-3 py-2.5 shadow-sm space-y-1.5">
                 <div className="flex justify-between text-[11px] text-slate-500">
-                  <span>Total paid tuitions ({selectedAdminStats?.tuitionPaidCount ?? 0})</span>
+                  <span>
+                    Total paid tuitions (
+                    {selectedAdminStats?.tuitionPaidCount ?? 0})
+                  </span>
                   <span className="font-medium text-slate-900">
                     ₹{selectedAdminPaidTotal.toLocaleString("en-IN")}
                   </span>
@@ -840,16 +874,15 @@ export default function PaymentDashboard() {
                 <div className="flex justify-between text-sm font-semibold">
                   <span className="text-slate-700">Estimated payout</span>
                   <span className="text-indigo-700">
-                    ₹{
-                      (
-                        (selectedAdminPaidTotal *
-                          Number(payoutPctDraft[selectedAdminKey] ?? 0)) /
-                        100
-                      ).toLocaleString("en-IN", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })
-                    }
+                    ₹
+                    {(
+                      (selectedAdminPaidTotal *
+                        Number(payoutPctDraft[selectedAdminKey] ?? 0)) /
+                      100
+                    ).toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </span>
                 </div>
               </div>
@@ -884,7 +917,10 @@ export default function PaymentDashboard() {
                       startContent={<Copy size={12} />}
                       onPress={() => {
                         navigator.clipboard.writeText(payoutLink);
-                        addToast({ description: "Link copied!", color: "success" });
+                        addToast({
+                          description: "Link copied!",
+                          color: "success",
+                        });
                       }}
                     >
                       Copy link
@@ -1009,8 +1045,7 @@ export default function PaymentDashboard() {
         Choose a source from the dropdown to inspect its tuition and job
         activity.
       </p>
-
-      <div className="max-w-md">
+      <div className="flex w-full gap-2">
         <Select
           label="Source"
           size="sm"
@@ -1022,17 +1057,17 @@ export default function PaymentDashboard() {
             setSelectedSourceKey(value ?? sourceLists[0]?.key ?? "other");
           }}
           className="min-w-0"
-          variant="bordered"
+          variant="bordered" 
         >
           {sourceSelectItems}
         </Select>
-      </div>
 
-      {selectedSourceKey === "referral" && (
-        <div className="max-w-md">
+
+        {selectedSourceKey === "referral" && (
           <Select
             label="Referrer"
             size="sm"
+            items={referralSelectData}
             selectedKeys={
               selectedReferralKey
                 ? new Set([selectedReferralKey])
@@ -1047,7 +1082,9 @@ export default function PaymentDashboard() {
                 return;
               }
 
-              const referral = referralOptions.find((item) => item.key === value);
+              const referral = referralOptions.find(
+                (item) => item.key === value,
+              );
               setSelectedReferralKey(value);
               setSelectedReferralName(referral?.label ?? "all");
               setSelectedReferralPhone(referral?.phone ?? "");
@@ -1055,15 +1092,18 @@ export default function PaymentDashboard() {
             className="min-w-0"
             variant="bordered"
           >
-            <SelectItem key="all">All referrers</SelectItem>
-            {referralOptions.map((referral) => (
-              <SelectItem key={referral.key}>
-                {referral.label} • {referral.phone} ({referral.count})
+            {(item) => (
+              <SelectItem key={item.key}>
+                {item.isAll
+                  ? "All referrers"
+                  : item.phone
+                    ? `${item.label} • ${item.phone}`
+                    : `${item.label}`}
               </SelectItem>
-            ))}
+            )}
           </Select>
-        </div>
-      )}
+        )}
+      </div>
 
       {selectedSourceKey === "referral" && selectedReferralName !== "all" && (
         <Card className="border border-dashed border-slate-200 bg-linear-to-br from-slate-50 to-indigo-50/25 shadow-none max-w-md">
@@ -1126,7 +1166,10 @@ export default function PaymentDashboard() {
                     startContent={<Copy size={12} />}
                     onPress={() => {
                       navigator.clipboard.writeText(referralInvoiceLink);
-                      addToast({ description: "Link copied!", color: "success" });
+                      addToast({
+                        description: "Link copied!",
+                        color: "success",
+                      });
                     }}
                   >
                     Copy link
@@ -1223,8 +1266,7 @@ export default function PaymentDashboard() {
                               <span>Referral</span>
                               <span className="h-1 w-1 rounded-full bg-amber-400" />
                               <span>
-                                {post.referralUserName ??
-                                  "No referral"}
+                                {post.referralUserName ?? "No referral"}
                               </span>
                             </div>
                           ) : null}
@@ -1302,88 +1344,86 @@ export default function PaymentDashboard() {
     </div>
   );
 
-  const renderPostsTab = () => (
-    <div className="space-y-2.5">
-      <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-2.5 py-2">
-        <p className="text-xs font-medium text-slate-600">
-          Post payment filter
-        </p>
-        <Tabs
-          aria-label="Post payment status"
-          color="primary"
-          selectedKey={postStatusTab}
-          variant="underlined"
-          onSelectionChange={(key) => setPostStatusTab(key as PostStatusTabKey)}
-          classNames={{ tabList: "gap-2", cursor: "w-full" }}
-        >
-          <Tab
-            key="paid"
-            title={
-              <div className="inline-flex items-center gap-2">
-                <span>Paid</span>
-                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
-                  {postStatusCounts.paid}
-                </span>
-              </div>
-            }
-          />
-          <Tab
-            key="unpaid"
-            title={
-              <div className="inline-flex items-center gap-2">
-                <span>Unpaid</span>
-                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">
-                  {postStatusCounts.unpaid}
-                </span>
-              </div>
-            }
-          />
-        </Tabs>
-      </div>
+  const renderPostsTab = () => {
+    const postsList = [
+      ...filteredTuitionPosts.map((post) => {
+        const isPaid = isTuitionPaid(post);
+        return {
+          kind: "tuition" as const,
+          id: post.postId,
+          title: post.guardianName,
+          subtitle: formatPhone(post.guardianPhone),
+          source: post.source,
+          createdAt: post.createdAt,
+          tuitionFee: post.monthlyBudget,
+          statusLabel: "Payment status",
+          statusValue: isPaid ? "Paid" : "Pending",
+          invoiceId: post.invoiceId,
+          invoiceGenerated: post.invoiceGenerated,
+          isPaid,
+        };
+      }),
+      ...filteredJobs.map((job) => {
+        const isPaid = isJobPaid(job);
+        return {
+          kind: "job" as const,
+          id: job.jobId,
+          title: job.title,
+          subtitle: job.clientName,
+          source: job.source,
+          createdAt: job.createdAt,
+          tuitionFee: undefined,
+          statusLabel: "Status",
+          statusValue: job.status ?? "Open",
+          invoiceId: job.invoiceId,
+          invoiceGenerated: job.invoiceGenerated,
+          isPaid,
+        };
+      }),
+    ];
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-2">
-        {[
-          ...filteredTuitionPosts.map((post) => ({
-            kind: "tuition" as const,
-            id: post.postId,
-            title: post.guardianName,
-            subtitle: formatPhone(post.guardianPhone),
-            source: post.source,
-            createdAt: post.createdAt,
-            tuitionFee: post.monthlyBudget,
-            statusLabel: "Payment status",
-            statusValue:
-              post.paymentstatus === "done" ||
-              post.invoicePaymentStatus === "paid" ||
-              post.invoicePaymentStatus === "partial"
-                ? "Paid"
-                : "Pending",
-            invoiceId: post.invoiceId,
-            invoiceGenerated: post.invoiceGenerated,
-            isPaid:
-              post.paymentstatus === "done" ||
-              post.invoicePaymentStatus === "paid" ||
-              post.invoicePaymentStatus === "partial",
-          })),
-          ...filteredJobs.map((job) => ({
-            kind: "job" as const,
-            id: job.jobId,
-            title: job.title,
-            subtitle: job.clientName,
-            source: job.source,
-            createdAt: job.createdAt,
-            tuitionFee: undefined,
-            statusLabel: "Status",
-            statusValue: job.status ?? "Open",
-            invoiceId: job.invoiceId,
-            invoiceGenerated: job.invoiceGenerated,
-            isPaid: Boolean(job.invoiceGenerated),
-          })),
-        ]
-          .filter((post) =>
-            postStatusTab === "paid" ? post.isPaid : !post.isPaid,
-          )
-          .map((post) => (
+    const displayedPosts = postsList.filter((post) =>
+      postStatusTab === "paid" ? post.isPaid : !post.isPaid,
+    );
+
+    return (
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-2.5 py-2">
+          <Tabs
+            aria-label="Post payment status"
+            color="primary"
+            selectedKey={postStatusTab}
+            variant="underlined"
+            onSelectionChange={(key) => setPostStatusTab(key as PostStatusTabKey)}
+            classNames={{ tabList: "gap-2", cursor: "w-full" }}
+          >
+            <Tab
+              key="paid"
+              title={
+                <div className="inline-flex items-center gap-2">
+                  <span>Paid</span>
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+                    {postStatusCounts.paid}
+                  </span>
+                </div>
+              }
+            />
+            <Tab
+              key="unpaid"
+              title={
+                <div className="inline-flex items-center gap-2">
+                  <span>Unpaid</span>
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">
+                    {postStatusCounts.unpaid}
+                  </span>
+                </div>
+              }
+            />
+          </Tabs>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-2">
+          {displayedPosts.map((post) => (
             <Card
               key={`${post.kind}-${post.id}`}
               className="border border-slate-200/70 shadow-none"
@@ -1451,26 +1491,16 @@ export default function PaymentDashboard() {
               </CardBody>
             </Card>
           ))}
-      </div>
-
-      {![
-        ...filteredTuitionPosts.map((post) =>
-          postStatusTab === "paid"
-            ? post.paymentstatus === "done"
-            : post.paymentstatus !== "done",
-        ),
-        ...filteredJobs.map((job) =>
-          postStatusTab === "paid"
-            ? Boolean(job.invoiceGenerated)
-            : !job.invoiceGenerated,
-        ),
-      ].some(Boolean) && (
-        <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-          No {postStatusTab} posts found for the selected period.
         </div>
-      )}
-    </div>
-  );
+
+        {displayedPosts.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+            No {postStatusTab} posts found for the selected period.
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const content = loading ? (
     <div className="flex min-h-[50vh] items-center justify-center">

@@ -49,6 +49,17 @@ export function ReferralPicker({
     () => new Set(options.map((option) => option.key)),
     [options],
   );
+
+  const pickerSelectData = useMemo(
+    () => [
+      { key: ADD_NEW_VALUE, label: "➕ Add new referrer" },
+      ...options.map((option) => ({
+        key: option.key,
+        label: option.label,
+      })),
+    ],
+    [options],
+  );
   const [customValue, setCustomValue] = useState("");
   const [isCustomMode, setIsCustomMode] = useState(false);
 
@@ -87,6 +98,7 @@ export function ReferralPicker({
       <Select
         label={label}
         placeholder={placeholder}
+        items={pickerSelectData}
         selectedKeys={selectedKey ? new Set([selectedKey]) : new Set<string>()}
         onSelectionChange={(keys) => {
           const next = Array.from(keys)[0] as string | undefined;
@@ -116,10 +128,7 @@ export function ReferralPicker({
         errorMessage={errorMessage}
         variant="bordered"
       >
-        <SelectItem key={ADD_NEW_VALUE}>➕ Add new referrer</SelectItem>
-        {options.map((option) => (
-          <SelectItem key={option.key}>{option.label}</SelectItem>
-        ))}
+        {(item) => <SelectItem key={item.key}>{item.label}</SelectItem>}
       </Select>
 
       {selectedKey === ADD_NEW_VALUE && (
