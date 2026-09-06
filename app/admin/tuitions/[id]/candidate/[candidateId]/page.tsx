@@ -33,6 +33,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { User } from "@heroui/user";
+import { formatDisplayDate } from "@/lib/utils/display-date";
 
 type ApplicationStatus =
   | "applied"
@@ -95,7 +96,9 @@ export default function CandidateDetailPage({
   const [gcDate, setGcDate] = useState<string>("");
   const [approvedDate, setApprovedDate] = useState<string>("");
   const [declineReason, setDeclineReason] = useState<string>("");
-  const [paymentStatus, setPaymentStatus] = useState<"paid" | "unpaid">("unpaid");
+  const [paymentStatus, setPaymentStatus] = useState<"paid" | "unpaid">(
+    "unpaid",
+  );
   const [isUpdating, setIsUpdating] = useState(false);
 
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -112,12 +115,12 @@ export default function CandidateDetailPage({
       setFetchError(null);
       try {
         const res = await fetch(
-          `/api/v1/posts/${postId}/applications/${applicationId}`
+          `/api/v1/posts/${postId}/applications/${applicationId}`,
         );
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           throw new Error(
-            data.error || `Failed to fetch application (${res.status})`
+            data.error || `Failed to fetch application (${res.status})`,
           );
         }
         const { application: app } = await res.json();
@@ -144,33 +147,35 @@ export default function CandidateDetailPage({
 
         const invoiceRes = await fetch(
           `/api/admin/invoices?postId=${encodeURIComponent(postId)}&limit=1`,
-          { credentials: "include" }
+          { credentials: "include" },
         );
         if (invoiceRes.ok) {
           const invoiceData = await invoiceRes.json();
-          const invoice = (invoiceData.invoices?.[0] ?? null) as TuitionInvoiceStatus | null;
-          setPaymentStatus(invoice?.paymentStatus === "paid" ? "paid" : "unpaid");
+          const invoice = (invoiceData.invoices?.[0] ??
+            null) as TuitionInvoiceStatus | null;
+          setPaymentStatus(
+            invoice?.paymentStatus === "paid" ? "paid" : "unpaid",
+          );
         } else {
           setPaymentStatus("unpaid");
         }
 
         // Fetch ledger startingDate for approved tuitions
-        const ledgerRes = await fetch(
-          `/api/admin/tuitions/${postId}/ledger`,
-          { credentials: "include" }
-        );
+        const ledgerRes = await fetch(`/api/admin/tuitions/${postId}/ledger`, {
+          credentials: "include",
+        });
         if (ledgerRes.ok) {
           const ledgerData = await ledgerRes.json();
           if (ledgerData.startingDate) {
             setStartingDate(
-              new Date(ledgerData.startingDate).toISOString().slice(0, 10)
+              new Date(ledgerData.startingDate).toISOString().slice(0, 10),
             );
           }
         }
       } catch (err) {
-      reportClientError(err, { feature: "admin-tuition-candidate" });
+        reportClientError(err, { feature: "admin-tuition-candidate" });
         setFetchError(
-          err instanceof Error ? err.message : "Failed to fetch application"
+          err instanceof Error ? err.message : "Failed to fetch application",
         );
       } finally {
         setIsLoading(false);
@@ -189,7 +194,7 @@ export default function CandidateDetailPage({
     try {
       const res = await fetch(
         `/api/v1/posts/${postId}/applications/${applicationId}`,
-        { method: "DELETE" }
+        { method: "DELETE" },
       );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -289,7 +294,7 @@ export default function CandidateDetailPage({
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
-        }
+        },
       );
 
       if (!res.ok) {
@@ -358,7 +363,9 @@ export default function CandidateDetailPage({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          startingDate: startingDate ? new Date(startingDate).toISOString() : null,
+          startingDate: startingDate
+            ? new Date(startingDate).toISOString()
+            : null,
         }),
       });
       if (!res.ok) {
@@ -370,7 +377,9 @@ export default function CandidateDetailPage({
       reportClientError(error, { feature: "admin-tuition-candidate" });
       addToast({
         description:
-          error instanceof Error ? error.message : "Failed to save starting date",
+          error instanceof Error
+            ? error.message
+            : "Failed to save starting date",
         color: "danger",
       });
     } finally {
@@ -380,7 +389,7 @@ export default function CandidateDetailPage({
 
   // Helper functions
   const getStatusColor = (
-    status: string
+    status: string,
   ): "default" | "primary" | "secondary" | "success" | "warning" | "danger" => {
     switch (status) {
       case "applied":
@@ -629,7 +638,7 @@ export default function CandidateDetailPage({
             <div>
               <p className="text-xs text-default-500">Applied Date</p>
               <p className="font-medium text-default-700">
-                {new Date(application.appliedAt).toLocaleDateString()}
+                {formatDisplayDate(application.appliedAt)}
               </p>
             </div>
           </div>
@@ -716,9 +725,9 @@ export default function CandidateDetailPage({
                                   hour: "numeric",
                                   minute: "2-digit",
                                   hour12: true,
-                                }
+                                },
                               )
-                            : new Date(checkpoint.date).toLocaleDateString()}
+                            : formatDisplayDate(checkpoint.date)}
                         </p>
                       )}
                     </div>
@@ -922,7 +931,6 @@ export default function CandidateDetailPage({
           </ModalFooter>
         </ModalContent>
       </Modal>
-
     </div>
   );
 }

@@ -4,6 +4,7 @@ import dbConnect from "@/lib/db";
 import Invoice from "@/lib/models/Invoice";
 import Application from "@/lib/models/Application";
 import Post from "@/lib/models/Post";
+import Job from "@/lib/models/Job";
 import { siteConfig } from "@/config/site";
 import { auth } from "@clerk/nextjs/server";
 import Admin from "@/lib/models/Admin";
@@ -57,10 +58,7 @@ export async function GET(request: NextRequest) {
 
       if (filter.invoiceId) {
         // If we already have an invoiceId condition, put them both in $and
-        filter.$and = [
-          { invoiceId: filter.invoiceId },
-          { $or: searchOr },
-        ];
+        filter.$and = [{ invoiceId: filter.invoiceId }, { $or: searchOr }];
         delete filter.invoiceId;
       } else {
         filter.$or = searchOr;
@@ -70,7 +68,11 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     const [invoices, total] = await Promise.all([
-      Invoice.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Invoice.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       Invoice.countDocuments(filter),
     ]);
 
@@ -85,7 +87,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    return handleApiError(error, "GET /api/admin/invoices", { legacyAdminShape: true });
+    return handleApiError(error, "GET /api/admin/invoices", {
+      legacyAdminShape: true,
+    });
   }
 }
 
@@ -155,21 +159,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let linkedJob: {
+      jobId: string;
+      settledAmount?: number;
+      academyCommissionPercentage: number;
+    } | null = null;
+
     if (postId) {
       const existingPost = await Post.findOne({ postId }).lean();
-      if (!existingPost) {
+      const existingJob = existingPost
+        ? null
+        : await Job.findOne({ jobId: postId }).lean<{
+            jobId: string;
+            settledAmount?: number;
+            academyCommissionPercentage: number;
+            invoiceGenerated?: boolean;
+          }>();
+      if (!existingPost && !existingJob) {
         return NextResponse.json(
-          { success: false, message: "Post not found" },
+          { success: false, message: "Post or job not found" },
           { status: 404 },
         );
       }
-      if (existingPost.invoiceGenerated) {
+      if (existingPost?.invoiceGenerated || existingJob?.invoiceGenerated) {
         return NextResponse.json(
-          { success: false, message: "Invoice already generated for this post. You can only modify the existing invoice." },
+          {
+            success: false,
+            message:
+              "Invoice already generated for this post. You can only modify the existing invoice.",
+          },
           { status: 400 },
         );
       }
+      linkedJob = existingJob;
     }
+
+    const calculatedJobFee = linkedJob
+      ? Math.round(
+          (((Number(linkedJob.settledAmount) || 0) *
+            Number(linkedJob.academyCommissionPercentage || 0)) /
+            100) *
+            100,
+        ) / 100
+      : null;
+    const effectiveGrandTotal = calculatedJobFee ?? (Number(grandTotal) || 0);
 
     // ── Generate invoiceId ──────────────────────────────────────────────────
     // Format: INV-{postId without prefix}-{4-char random} or INV-{random 8 chars}
@@ -199,7 +232,7 @@ export async function POST(request: NextRequest) {
     // ── Partial payment ─────────────────────────────────────────────────────
     let partialPayment = undefined;
     if (paymentStatus === "partial") {
-      const total = Number(grandTotal) || 0;
+      const total = effectiveGrandTotal;
       let amountPaid = 0;
       let pctPaid = 0;
 
@@ -273,10 +306,10 @@ export async function POST(request: NextRequest) {
 
       amount: {
         currency,
-        subTotal: Number(subTotal) || 0,
+        subTotal: linkedJob ? effectiveGrandTotal : Number(subTotal) || 0,
         taxPercentage: Number(taxPercentage) || 0,
         taxAmount: Number(taxAmount) || 0,
-        grandTotal: Number(grandTotal) || 0,
+        grandTotal: effectiveGrandTotal,
       },
 
       breakdown: {
@@ -313,6 +346,10 @@ export async function POST(request: NextRequest) {
 
     if (postId) {
       await Post.updateOne({ postId }, { $set: { invoiceGenerated: true } });
+      await Job.updateOne(
+        { jobId: postId },
+        { $set: { invoiceGenerated: true, invoiceId } },
+      );
     }
 
     try {
@@ -339,10 +376,15 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: true, invoice: { id: invoice._id, invoiceId: invoice.invoiceId } },
+      {
+        success: true,
+        invoice: { id: invoice._id, invoiceId: invoice.invoiceId },
+      },
       { status: 201 },
     );
   } catch (error) {
-    return handleApiError(error, "POST /api/admin/invoices", { legacyAdminShape: true });
+    return handleApiError(error, "POST /api/admin/invoices", {
+      legacyAdminShape: true,
+    });
   }
 }

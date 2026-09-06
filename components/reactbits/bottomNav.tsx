@@ -29,7 +29,12 @@ export default function BottomNav() {
       : { icon: MailQuestionMark, label: "Enquiry", path: "/enquiry" },
   ];
 
-  const activeIndex = items.findIndex((item) => pathname === item.path) || 0;
+  const activeIndex = Math.max(
+    0,
+    items.findIndex((item) =>
+      item.path === "/" ? pathname === "/" : pathname.startsWith(item.path),
+    ),
+  );
 
   return (
     <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[70%] max-w-sm z-50">
@@ -47,7 +52,10 @@ export default function BottomNav() {
 
           {items.map((item, index) => {
             const Icon = item.icon;
-            const isActive = pathname === item.path;
+            const isActive =
+              item.path === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.path);
 
             return (
               <li key={index} className="flex-1 relative z-10">

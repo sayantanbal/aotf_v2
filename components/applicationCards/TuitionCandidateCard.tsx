@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { formatPhone } from "@/lib/utils/phone";
 import { useRouter } from "next/navigation";
+import { formatDisplayDate } from "@/lib/utils/display-date";
 export interface Candidate {
   id: string;
   name: string;
@@ -163,7 +164,8 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
                   className="text-default-400 shrink-0"
                 />
                 <span className="font-medium text-default-700 truncate">
-                  {candidate.teachingExp?.trim() || "N/A"} {candidate.teachingExp?.trim() ? "yrs exp" : ""}
+                  {candidate.teachingExp?.trim() || "N/A"}{" "}
+                  {candidate.teachingExp?.trim() ? "yrs exp" : ""}
                 </span>
               </div>
             </div>
@@ -179,7 +181,7 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
       </CardBody>
       <CardFooter className="flex items-center justify-between gap-2 pt-1 p-2">
         <p className="text-xs font-semibold text-default-400">
-          Applied: {new Date(candidate.appliedDate).toLocaleDateString()}
+          Applied: {formatDisplayDate(candidate.appliedDate)}
         </p>
         <Button
           size="sm"

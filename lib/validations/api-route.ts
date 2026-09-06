@@ -44,7 +44,17 @@ export type DeleteApplicationsBodyInput = z.infer<
 export const updateApplicationStatusBodySchema = z
   .object({
     status: z.enum(
-      ["applied", "DC", "GC", "approved", "decline", "withdrawn"],
+      [
+        "applied",
+        "pending",
+        "shortlisted",
+        "DC",
+        "GC",
+        "approved",
+        "decline",
+        "declined",
+        "withdrawn",
+      ],
       {
         error: "Invalid status value",
       },

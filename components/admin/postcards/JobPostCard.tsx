@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
@@ -33,6 +33,7 @@ export interface JobPost {
   title: string;
   clientName: string;
   phoneNumber: string;
+  companyName?: string;
   companyType: "individual" | "company";
   locationType: "remote" | "onsite" | "hybrid";
   location: string;
@@ -48,6 +49,9 @@ export interface JobPost {
   status: "open" | "closed" | "hold" | "cancelled";
   commissionBasis: "first_month" | "project_value";
   academyCommissionPercentage: number;
+  settledAmount?: number;
+  invoiceGenerated?: boolean;
+  invoicePaymentStatus?: "paid" | "partial" | "unpaid";
   // Applicant data (will come from applications collection later)
   applicantCount?: number;
   applicationStats?: {
@@ -68,6 +72,7 @@ interface JobPostCardProps {
   onCancel?: (post: JobPost) => void;
   onView?: (post: JobPost) => void;
   onEdit?: (post: JobPost) => void;
+  onGenerateInvoice?: (post: JobPost) => void;
 }
 
 const formatLocationType = (type: string) =>
@@ -86,7 +91,9 @@ export const JobPostCard: React.FC<JobPostCardProps> = ({
   onCancel,
   onView,
   onEdit,
+  onGenerateInvoice,
 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
   const getStatusColor = (status: string) => {
     switch (status) {
       case "open":
@@ -120,7 +127,11 @@ export const JobPostCard: React.FC<JobPostCardProps> = ({
 
   return (
     <Card className="w-full max-w-md hover:shadow-lg transition-shadow duration-300">
-      <CardHeader className="flex flex-col gap-3 pb-3">
+      <CardHeader
+        className="flex flex-col gap-3 pb-3 cursor-pointer"
+        onClick={() => setIsExpanded((expanded) => !expanded)}
+        aria-expanded={isExpanded}
+      >
         <div className="flex justify-between items-start w-full">
           <div className="flex flex-col gap-1 flex-1">
             <div className="flex items-center justify-between gap-2">
@@ -155,192 +166,251 @@ export const JobPostCard: React.FC<JobPostCardProps> = ({
 
       <Divider />
 
-      <CardBody className="gap-2 py-2">
-        <Button
-          isIconOnly
-          aria-label="Edit post"
-          variant="faded"
-          className="absolute top-2 right-2"
-          onPress={() => onEdit?.(post)}
+      {!isExpanded && (
+        <CardBody
+          className="gap-2 py-2 cursor-pointer"
+          onClick={() => setIsExpanded(true)}
         >
-          <Edit size={16} />
-        </Button>
-
-        {/* Job Details */}
-        <div className="space-y-2">
-          <div>
+          <div className="space-y-2">
             <h3 className="text-lg font-bold text-default-900">{post.title}</h3>
-            <p className="text-sm text-default-500">
-              {post.clientName}{" "}
-              <span className="text-xs text-default-400 capitalize">
-                ({post.companyType})
-              </span>
-            </p>
-          </div>
-
-          <Divider />
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {post.experience && (
-              <div className="flex items-center gap-2 text-sm">
-                <Briefcase size={16} className="text-default-400" />
-                <div>
-                  <span className="text-default-500">Experience:</span>{" "}
-                  <span className="font-medium text-default-700">
-                    {post.experience} years
-                  </span>
-                </div>
-              </div>
-            )}
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin size={16} className="text-default-400" />
-              <div>
-                <span className="text-default-500">Location:</span>{" "}
-                <span className="font-medium text-default-700">
-                  {post.location}
+            <div className="grid grid-cols-1 gap-1 text-sm">
+              {post.experience && (
+                <span className="text-default-600">
+                  Experience: <strong>{post.experience} years</strong>
                 </span>
-              </div>
-            </div>
-            {post.workType === "job" && post.salary && (
-              <div className="flex items-center gap-2 text-sm">
-                <FaRupeeSign size={16} className="text-default-400" />
-                <div>
-                  <span className="text-default-500">Salary:</span>{" "}
-                  <span className="font-medium text-success-600">
-                    {post.salary}
-                  </span>
-                </div>
-              </div>
-            )}
-            {post.workType === "project" && post.budget && (
-              <div className="flex items-center gap-2 text-sm">
-                <FaRupeeSign size={16} className="text-default-400" />
-                <div>
-                  <span className="text-default-500">Budget:</span>{" "}
-                  <span className="font-medium text-success-600">
-                    {post.budget}
-                  </span>
-                </div>
-              </div>
-            )}
-            <div className="flex items-center gap-2 text-sm">
-              <Clock size={16} className="text-default-400" />
-              <div>
-                <span className="text-default-500">Type:</span>{" "}
-                <span className="font-medium text-default-700">
-                  {formatLocationType(post.locationType)}
+              )}
+              {(post.workType === "job" ? post.salary : post.budget) && (
+                <span className="text-default-600">
+                  <FaRupeeSign className="mr-1 inline" />
+                  {post.workType === "job" ? post.salary : post.budget}
                 </span>
-              </div>
+              )}
+              {post.requiredQualification && (
+                <span className="text-default-600">
+                  Qualification: <strong>{post.requiredQualification}</strong>
+                </span>
+              )}
             </div>
           </div>
+        </CardBody>
+      )}
 
-          <div className="grid grid-cols-1 gap-2">
-            <div className="flex items-start gap-2 text-sm">
-              <Calendar size={16} className="text-default-400 mt-0.5" />
-              <div>
-                <span className="text-default-500">Timing:</span>{" "}
-                <span className="font-medium text-default-700">
-                  {post.timing}
+      {isExpanded && (
+        <CardBody className="gap-2 py-2">
+          <Button
+            isIconOnly
+            aria-label="Edit post"
+            variant="faded"
+            className="absolute top-2 right-2"
+            onPress={() => onEdit?.(post)}
+          >
+            <Edit size={16} />
+          </Button>
+          {/* Job Details */}
+          <div className="space-y-2">
+            <div>
+              <h3 className="text-lg font-bold text-default-900">
+                {post.title}
+              </h3>
+              <p className="text-sm text-default-500">
+                {post.clientName}{" "}
+                <span className="text-xs text-default-400 capitalize">
+                  ({post.companyType})
                 </span>
-              </div>
+              </p>
             </div>
-            {post.requiredQualification && (
-              <div className="flex items-start gap-2 text-sm">
-                <Briefcase size={16} className="text-default-400 mt-0.5" />
-                <div>
-                  <span className="text-default-500">Qualification:</span>{" "}
-                  <span className="font-medium text-default-700">
-                    {post.requiredQualification}
-                  </span>
-                </div>
-              </div>
-            )}
-            {post.workType === "project" && post.duration && (
-              <div className="flex items-start gap-2 text-sm">
-                <Clock size={16} className="text-default-400 mt-0.5" />
-                <div>
-                  <span className="text-default-500">Duration:</span>{" "}
-                  <span className="font-medium text-default-700">
-                    {post.duration}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <Divider />
-
-          {/* Client Contact */}
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-semibold text-default-700">
-              Client Contact:{" "}
-              <span className="text-default-600">{formatPhone(post.phoneNumber)}</span>
-            </p>
-          </div>
-
-          <Divider />
-
-          {/* Commission Info */}
-          <div className="flex items-center gap-2 text-sm">
-            <FaRupeeSign size={14} className="text-default-400" />
-            <span className="text-default-500">Commission:</span>{" "}
-            <span className="font-medium text-default-700">
-              {post.academyCommissionPercentage}% (
-              {formatCommissionBasis(post.commissionBasis)})
-            </span>
-          </div>
-
-          {/* <Divider /> */}
-
-          {/* Application Statistics */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-default-700">
-                  Applications:
-                </span>
-              </div>
-              <Chip size="sm" color="primary" variant="flat">
-                {post.applicantCount ?? 0} Total
+            {post.invoiceGenerated && post.invoicePaymentStatus && (
+              <Chip
+                size="sm"
+                color={
+                  post.invoicePaymentStatus === "paid"
+                    ? "success"
+                    : post.invoicePaymentStatus === "partial"
+                      ? "secondary"
+                      : "warning"
+                }
+                variant="flat"
+                className="capitalize"
+              >
+                Invoice {post.invoicePaymentStatus}
               </Chip>
+            )}
+
+            <Divider />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {post.experience && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Briefcase size={16} className="text-default-400" />
+                  <div>
+                    <span className="text-default-500">Experience:</span>{" "}
+                    <span className="font-medium text-default-700">
+                      {post.experience} years
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-sm">
+                <MapPin size={16} className="text-default-400" />
+                <div>
+                  <span className="text-default-500">Location:</span>{" "}
+                  <span className="font-medium text-default-700">
+                    {post.location}
+                  </span>
+                </div>
+              </div>
+              {post.workType === "job" && post.salary && (
+                <div className="flex items-center gap-2 text-sm">
+                  <FaRupeeSign size={16} className="text-default-400" />
+                  <div>
+                    <span className="text-default-500">Salary:</span>{" "}
+                    <span className="font-medium text-success-600">
+                      {post.salary}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {post.workType === "project" && post.budget && (
+                <div className="flex items-center gap-2 text-sm">
+                  <FaRupeeSign size={16} className="text-default-400" />
+                  <div>
+                    <span className="text-default-500">Budget:</span>{" "}
+                    <span className="font-medium text-success-600">
+                      {post.budget}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-sm">
+                <Clock size={16} className="text-default-400" />
+                <div>
+                  <span className="text-default-500">Type:</span>{" "}
+                  <span className="font-medium text-default-700">
+                    {formatLocationType(post.locationType)}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="flex flex-col items-center p-2 bg-warning-50 rounded-lg">
-                <p className="text-xs text-warning-600">Pending</p>
-                <p className="text-lg font-bold text-warning-700">
-                  {post.applicationStats?.pending ?? 0}
-                </p>
+            <div className="grid grid-cols-1 gap-2">
+              <div className="flex items-start gap-2 text-sm">
+                <Calendar size={16} className="text-default-400 mt-0.5" />
+                <div>
+                  <span className="text-default-500">Timing:</span>{" "}
+                  <span className="font-medium text-default-700">
+                    {post.timing}
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col items-center p-2 bg-success-50 rounded-lg">
-                <p className="text-xs text-success-600">Approved</p>
-                <p className="text-lg font-bold text-success-700">
-                  {post.applicationStats?.approved ?? 0}
-                </p>
+              {post.requiredQualification && (
+                <div className="flex items-start gap-2 text-sm">
+                  <Briefcase size={16} className="text-default-400 mt-0.5" />
+                  <div>
+                    <span className="text-default-500">Qualification:</span>{" "}
+                    <span className="font-medium text-default-700">
+                      {post.requiredQualification}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {post.workType === "project" && post.duration && (
+                <div className="flex items-start gap-2 text-sm">
+                  <Clock size={16} className="text-default-400 mt-0.5" />
+                  <div>
+                    <span className="text-default-500">Duration:</span>{" "}
+                    <span className="font-medium text-default-700">
+                      {post.duration}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Divider />
+
+            {/* Client Contact */}
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-semibold text-default-700">
+                Client Contact:{" "}
+                <span className="text-default-600">
+                  {formatPhone(post.phoneNumber)}
+                </span>
+              </p>
+            </div>
+
+            <Divider />
+
+            {/* Commission Info */}
+            <div className="flex items-center gap-2 text-sm">
+              <FaRupeeSign size={14} className="text-default-400" />
+              <span className="text-default-500">Commission:</span>{" "}
+              <span className="font-medium text-default-700">
+                {post.academyCommissionPercentage}% (
+                {formatCommissionBasis(post.commissionBasis)})
+              </span>
+            </div>
+
+            {/* <Divider /> */}
+
+            {/* Application Statistics */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-default-700">
+                    Applications:
+                  </span>
+                </div>
+                <Chip size="sm" color="primary" variant="flat">
+                  {post.applicantCount ?? 0} Total
+                </Chip>
               </div>
-              <div className="flex flex-col items-center p-2 bg-danger-50 rounded-lg">
-                <p className="text-xs text-danger-600">Declined</p>
-                <p className="text-lg font-bold text-danger-700">
-                  {post.applicationStats?.declined ?? 0}
-                </p>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="flex flex-col items-center p-2 bg-warning-50 rounded-lg">
+                  <p className="text-xs text-warning-600">Pending</p>
+                  <p className="text-lg font-bold text-warning-700">
+                    {post.applicationStats?.pending ?? 0}
+                  </p>
+                </div>
+                <div className="flex flex-col items-center p-2 bg-success-50 rounded-lg">
+                  <p className="text-xs text-success-600">Approved</p>
+                  <p className="text-lg font-bold text-success-700">
+                    {post.applicationStats?.approved ?? 0}
+                  </p>
+                </div>
+                <div className="flex flex-col items-center p-2 bg-danger-50 rounded-lg">
+                  <p className="text-xs text-danger-600">Declined</p>
+                  <p className="text-lg font-bold text-danger-700">
+                    {post.applicationStats?.declined ?? 0}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </CardBody>
+        </CardBody>
+      )}
 
       <Divider />
 
-      <CardFooter className="gap-2 py-3">
+      <CardFooter className="grid grid-cols-2 gap-2 py-3">
+        {onGenerateInvoice && (
+          <Button
+            size="sm"
+            variant="flat"
+            color="secondary"
+            onPress={() => onGenerateInvoice(post)}
+          >
+            {post.invoiceGenerated ? "Edit Invoice" : "Invoice"}
+          </Button>
+        )}
         <Button
           size="sm"
-          color="primary"
+          color="success"
           variant="solid"
-          startContent={<Share2 size={16} />}
-          onPress={handleShare}
-          className="flex-1"
+          startContent={<Eye size={16} />}
+          onPress={() => onView?.(post)}
         >
-          Share
+          View
         </Button>
         <Button
           size="sm"
@@ -348,19 +418,17 @@ export const JobPostCard: React.FC<JobPostCardProps> = ({
           variant="solid"
           startContent={<XCircle size={16} />}
           onPress={() => onCancel?.(post)}
-          className="flex-1"
         >
           {post.status === "cancelled" ? "Restore" : "Cancel"}
         </Button>
         <Button
           size="sm"
-          color="success"
+          color="primary"
           variant="solid"
-          startContent={<Eye size={16} />}
-          onPress={() => onView?.(post)}
-          className="flex-1"
+          startContent={<Share2 size={16} />}
+          onPress={handleShare}
         >
-          View
+          Share
         </Button>
       </CardFooter>
     </Card>

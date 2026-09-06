@@ -61,15 +61,15 @@ function mapApiPost(p: Record<string, any>): TuitionPost {
     type: "post",
     invoiceId: p.invoiceId,
     invoiceGenerated: p.invoiceGenerated,
-    applicantCount: 0,
+    applicantCount: p.applicantCount ?? 0,
     applicationStats: {
-      pending: 0,
+      pending: p.applicationStats?.pending ?? 0,
       DC: 0,
       GC: 0,
-      approved: 0,
-      declined: 0,
-      withdrawn: 0,
-      total: 0,
+      approved: p.applicationStats?.approved ?? 0,
+      declined: p.applicationStats?.declined ?? 0,
+      withdrawn: p.applicationStats?.withdrawn ?? 0,
+      total: p.applicationStats?.total ?? p.applicantCount ?? 0,
     },
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
@@ -218,11 +218,13 @@ function InvoiceModal({
   }, [post.id]);
 
   const [saving, setSaving] = useState(false);
-  const [existingInvoice, setExistingInvoice] = useState<ExistingInvoiceRecord | null>(null);
+  const [existingInvoice, setExistingInvoice] =
+    useState<ExistingInvoiceRecord | null>(null);
   const [loadingExistingInvoice, setLoadingExistingInvoice] = useState(false);
 
   const total = form.unitAmount;
-  const existingRate = existingInvoice?.breakdown?.items?.[0]?.unitAmount ?? null;
+  const existingRate =
+    existingInvoice?.breakdown?.items?.[0]?.unitAmount ?? null;
   const allowRateEdit = existingInvoice
     ? (existingRate ?? existingInvoice.amount?.grandTotal ?? 0) === 0
     : form.unitAmount === 0;
@@ -238,12 +240,13 @@ function InvoiceModal({
       try {
         const res = await fetch(
           `/api/admin/invoices?postId=${encodeURIComponent(post.id)}&limit=1`,
-          { credentials: "include" }
+          { credentials: "include" },
         );
         if (!res.ok) return;
 
         const data = await res.json();
-        const invoice = (data.invoices?.[0] ?? null) as ExistingInvoiceRecord | null;
+        const invoice = (data.invoices?.[0] ??
+          null) as ExistingInvoiceRecord | null;
         if (!active || !invoice) return;
 
         setExistingInvoice(invoice);
@@ -263,17 +266,23 @@ function InvoiceModal({
           itemName: firstItem?.name ?? prev.itemName,
           itemDescription: firstItem?.description ?? prev.itemDescription,
           unitAmount:
-            firstItem?.unitAmount ?? invoice.amount?.grandTotal ?? prev.unitAmount,
+            firstItem?.unitAmount ??
+            invoice.amount?.grandTotal ??
+            prev.unitAmount,
           notes: invoice.breakdown?.notes ?? prev.notes,
           paymentStatus: invoice.paymentStatus ?? prev.paymentStatus,
           paymentDate: invoice.paymentDate
             ? new Date(invoice.paymentDate).toISOString().slice(0, 10)
             : prev.paymentDate,
-          partialMode: invoice.partialPayment?.amountPaid ? "amount" : prev.partialMode,
+          partialMode: invoice.partialPayment?.amountPaid
+            ? "amount"
+            : prev.partialMode,
           partialAmount:
-            invoice.partialPayment?.amountPaid?.toString() ?? prev.partialAmount,
+            invoice.partialPayment?.amountPaid?.toString() ??
+            prev.partialAmount,
           partialPct:
-            invoice.partialPayment?.percentagePaid?.toString() ?? prev.partialPct,
+            invoice.partialPayment?.percentagePaid?.toString() ??
+            prev.partialPct,
           currency: invoice.amount?.currency ?? prev.currency,
           teacherName: invoice.assignedTeacher?.name ?? prev.teacherName,
           teacherPhone: invoice.assignedTeacher?.phone ?? prev.teacherPhone,
@@ -566,7 +575,8 @@ function InvoiceModal({
               />
               {!allowRateEdit && (
                 <p className="text-[11px] text-default-400 mt-1">
-                  The rate is locked because this invoice already has a non-zero amount.
+                  The rate is locked because this invoice already has a non-zero
+                  amount.
                 </p>
               )}
             </div>
@@ -691,7 +701,7 @@ function InvoiceModal({
             Due after: ₹
             {Math.max(
               0,
-              total - (parseFloat(form.partialAmount) || 0)
+              total - (parseFloat(form.partialAmount) || 0),
             ).toLocaleString("en-IN")}
           </p>
         </div>
@@ -775,12 +785,12 @@ const Page = () => {
           total: mapped.length,
           totalPages: 1,
           limit: 10,
-        }
+        },
       );
     } catch (err) {
       reportClientError(err, { feature: "admin-tuitions" });
       setFetchError(
-        err instanceof Error ? err.message : "Failed to fetch posts"
+        err instanceof Error ? err.message : "Failed to fetch posts",
       );
     } finally {
       setIsLoading(false);
@@ -792,7 +802,7 @@ const Page = () => {
       () => {
         fetchPosts();
       },
-      searchQuery ? 400 : 0
+      searchQuery ? 400 : 0,
     );
     return () => clearTimeout(timer);
   }, [fetchPosts, searchQuery]);
@@ -827,19 +837,19 @@ const Page = () => {
         const startDate = new Date(
           dateRange.start.year,
           dateRange.start.month - 1,
-          dateRange.start.day
+          dateRange.start.day,
         );
         const endDate = new Date(
           dateRange.end.year,
           dateRange.end.month - 1,
-          dateRange.end.day
+          dateRange.end.day,
         );
         return postDate >= startDate && postDate <= endDate;
       });
     }
     if (selectedDateChip) {
       filtered = filtered.filter(
-        (p) => p.createdAt?.slice(0, 10) === selectedDateChip
+        (p) => p.createdAt?.slice(0, 10) === selectedDateChip,
       );
     }
     return filtered;

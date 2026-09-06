@@ -23,6 +23,8 @@ import {
 import { JobPostCard, JobPost } from "@/components/admin/postcards/JobPostCard";
 import { AlertTriangle, Plus } from "lucide-react";
 import { addToast } from "@heroui/toast";
+import { Receipt } from "lucide-react";
+import JobInvoiceModal from "@/components/admin/jobs/JobInvoiceModal";
 
 /** Map a DB job (from API) to the JobPost interface used by the card. */
 function mapApiJob(j: Record<string, unknown>): JobPost {
@@ -33,6 +35,7 @@ function mapApiJob(j: Record<string, unknown>): JobPost {
     workType: j.workType as JobPost["workType"],
     clientName: j.clientName as string,
     phoneNumber: j.phoneNumber as string,
+    companyName: j.companyName as string | undefined,
     companyType: j.companyType as JobPost["companyType"],
     locationType: j.locationType as JobPost["locationType"],
     location: j.location as string,
@@ -48,6 +51,10 @@ function mapApiJob(j: Record<string, unknown>): JobPost {
     status: j.status as JobPost["status"],
     commissionBasis: j.commissionBasis as JobPost["commissionBasis"],
     academyCommissionPercentage: j.academyCommissionPercentage as number,
+    settledAmount: j.settledAmount as number | undefined,
+    invoiceGenerated: Boolean(j.invoiceGenerated),
+    invoicePaymentStatus:
+      j.invoicePaymentStatus as JobPost["invoicePaymentStatus"],
     applicantCount: 0,
     createdAt: j.createdAt as string,
   };
@@ -74,6 +81,8 @@ const Page = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [cancelTarget, setCancelTarget] = useState<JobPost | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const invoiceDisclosure = useDisclosure();
+  const [invoiceJob, setInvoiceJob] = useState<JobPost | null>(null);
 
   // Debounce search
   useEffect(() => {
@@ -152,6 +161,11 @@ const Page = () => {
   const handleCancelPost = (post: JobPost) => {
     setCancelTarget(post);
     onOpen();
+  };
+
+  const handleGenerateInvoice = (post: JobPost) => {
+    setInvoiceJob(post);
+    invoiceDisclosure.onOpen();
   };
 
   const confirmCancel = async () => {
@@ -281,6 +295,7 @@ const Page = () => {
                   onView={handleViewPost}
                   onEdit={handleEditPost}
                   onCancel={handleCancelPost}
+                  onGenerateInvoice={handleGenerateInvoice}
                 />
               ))}
             </div>
@@ -330,6 +345,32 @@ const Page = () => {
               </>
             );
           }}
+        </ModalContent>
+      </Modal>
+
+      <Modal
+        isOpen={invoiceDisclosure.isOpen}
+        onClose={invoiceDisclosure.onClose}
+        size="lg"
+        scrollBehavior="inside"
+      >
+        <ModalContent>
+          <ModalHeader className="flex items-center gap-2">
+            <Receipt size={20} className="text-secondary-600" />
+            Job Invoice
+          </ModalHeader>
+          <ModalBody>
+            {invoiceJob && (
+              <JobInvoiceModal
+                job={invoiceJob}
+                onSuccess={() => {
+                  invoiceDisclosure.onClose();
+                  fetchJobs();
+                }}
+              />
+            )}
+          </ModalBody>
+          <ModalFooter />
         </ModalContent>
       </Modal>
     </div>

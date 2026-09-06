@@ -12,7 +12,11 @@ import {
 } from "react-icons/fa";
 import { BsCurrencyRupee } from "react-icons/bs";
 import { FaClock, FaCode } from "react-icons/fa6";
-import { MdOutlineWifiTethering, MdOutlineStorefront, MdCardTravel } from "react-icons/md";
+import {
+  MdOutlineWifiTethering,
+  MdOutlineStorefront,
+  MdCardTravel,
+} from "react-icons/md";
 import { TbReportMoney } from "react-icons/tb";
 import ApplyActionButton from "@/components/ApplyActionButton";
 import BackButton from "@/components/BackButton";
@@ -98,7 +102,13 @@ const formatSource = (source: string) =>
 
 /* ─── Reusable row ────────────────────────────────────────────── */
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
     <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
       <span className="text-gray-500 dark:text-gray-400 text-sm">{label}</span>
@@ -130,8 +140,9 @@ export default async function JobDetailPage({
   const locationInfo = getLocationIcon(job.locationType);
   const workTypeInfo = getWorkTypeIcon(job.workType);
 
-  const companyTypeLabel = job.companyType === "individual" ? "Individual" : "Company";
-  const displayCompanyName = job.companyName || (job.companyType === "company" ? job.clientName : null);
+  const companyTypeLabel =
+    job.companyType === "individual" ? "Individual" : "Company";
+  const displayCompanyName = job.companyName || null;
   const genderLabel =
     job.gender === "all" || job.gender === "both"
       ? "All Genders"
@@ -166,7 +177,8 @@ export default async function JobDetailPage({
           Role: {job.title}
         </h1>
         <p className="text-gray-500 dark:text-gray-400 text-base font-medium mb-3">
-          {displayCompanyName ? `${displayCompanyName} · ` : ""}{companyTypeLabel}
+          {displayCompanyName ? `${displayCompanyName} · ` : ""}
+          {companyTypeLabel}
         </p>
 
         {/* Salary / Budget */}
@@ -253,14 +265,25 @@ export default async function JobDetailPage({
         <div className="mt-3 px-1 space-y-3">
           <DetailRow label="Job ID" value={`# ${job.jobId}`} />
           <DetailRow label="Work Type" value={workTypeInfo.label} />
-          <DetailRow label="Client Name" value={job.clientName} />
-          {displayCompanyName && <DetailRow label="Company" value={displayCompanyName} />}
+          {displayCompanyName && (
+            <DetailRow label="Company Name" value={displayCompanyName} />
+          )}
           <DetailRow label="Company Type" value={companyTypeLabel} />
-          {job.experience && <DetailRow label="Experience" value={job.experience} />}
+          {job.experience && (
+            <DetailRow label="Experience" value={`${job.experience}yrs`} />
+          )}
           <DetailRow label="Gender Preference" value={genderLabel} />
           {job.timing && <DetailRow label="Working Hours" value={job.timing} />}
           {!isProject && job.salary && (
-            <DetailRow label="Salary" value={job.salary} />
+            <DetailRow
+              label="Salary"
+              value={
+                <span className="inline-flex items-center gap-1">
+                  <BsCurrencyRupee size={14} />
+                  {job.salary}
+                </span>
+              }
+            />
           )}
           {isProject && job.budget && (
             <DetailRow label="Budget" value={job.budget} />
@@ -269,7 +292,10 @@ export default async function JobDetailPage({
             <DetailRow label="Duration" value={job.duration} />
           )}
           {isProject && job.projectType && (
-            <DetailRow label="Project Type" value={<span className="capitalize">{job.projectType}</span>} />
+            <DetailRow
+              label="Project Type"
+              value={<span className="capitalize">{job.projectType}</span>}
+            />
           )}
         </div>
       </Card>
@@ -309,7 +335,10 @@ export default async function JobDetailPage({
       {job.travelRequirements && (
         <Card className="w-full p-4">
           <CardHeader className="p-0">
-            <MdCardTravel size={26} className="text-primary inline-block mr-2" />
+            <MdCardTravel
+              size={26}
+              className="text-primary inline-block mr-2"
+            />
             <h3 className="text-lg font-bold">Travel Requirements</h3>
           </CardHeader>
           <p className="mt-3 px-1 text-sm font-medium text-slate-600 dark:text-slate-100 leading-relaxed">

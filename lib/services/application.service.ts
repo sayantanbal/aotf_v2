@@ -510,7 +510,7 @@ export async function createPostApplication(
       applicantType: input.applicantType,
       applicantSnapshot: input.applicantSnapshot,
       coverLetter: input.coverLetter,
-      status: "applied",
+      status: "pending",
       isActive: true,
       appliedAt: new Date(),
     });
@@ -685,10 +685,13 @@ export async function deleteAllApplicationsByJobIdPublic(
 
 export type UpdateableApplicationStatus =
   | "applied"
+  | "pending"
+  | "shortlisted"
   | "DC"
   | "GC"
   | "approved"
   | "decline"
+  | "declined"
   | "withdrawn";
 
 export interface UpdateApplicationStatusParams {
@@ -803,8 +806,18 @@ export async function updateApplicationStatus(
     }
   }
 
+  // Job applications use pending -> shortlisted -> approved/declined.
+  if (
+    application.jobIdPublic &&
+    !["pending", "shortlisted", "approved", "declined", "withdrawn"].includes(
+      status,
+    )
+  ) {
+    throw new ConflictError("Invalid status for a job application");
+  }
+
   // decline requires reason
-  if (status === "decline") {
+  if (status === "decline" || status === "declined") {
     if (!reason || reason.trim().length === 0) {
       throw new ConflictError(
         "A reason is required when declining an application",
@@ -859,7 +872,7 @@ export async function updateApplicationStatus(
   }
 
   // Set decline meta when declining
-  if (status === "decline" && adminId) {
+  if ((status === "decline" || status === "declined") && adminId) {
     updateData.declineMeta = {
       reason: reason?.trim(),
       declinedByAdminId: adminId,

@@ -33,7 +33,10 @@ import {
   ModalFooter,
 } from "@heroui/modal";
 import { Enquiry } from "@/components/admin/enquiries/EnquiryCard";
-import { ReferralPicker, type ReferralOption } from "@/components/admin/referral-picker";
+import {
+  ReferralPicker,
+  type ReferralOption,
+} from "@/components/admin/referral-picker";
 import {
   jobFormSchema,
   companyTypes,
@@ -408,6 +411,7 @@ export default function JobPostForm({
             "first_month") as CommissionBasis,
           academyCommissionPercentage:
             job.academyCommissionPercentage?.toString() || "",
+          settledAmount: job.settledAmount?.toString() || "",
           projectType: job.projectType || "",
           budget: job.budget || "",
           duration: job.duration || "",
@@ -460,7 +464,8 @@ export default function JobPostForm({
       jobFormSchema.parse(dataToValidate);
       if (
         formData.source === "referral" &&
-        (!formData.referralUserName.trim() || !formData.referralPhoneNumber.trim())
+        (!formData.referralUserName.trim() ||
+          !formData.referralPhoneNumber.trim())
       ) {
         setErrors({
           referralUserName: formData.referralUserName.trim()
@@ -512,13 +517,15 @@ export default function JobPostForm({
           });
           if (
             formData.source === "referral" &&
-            (!formData.referralUserName.trim() || !formData.referralPhoneNumber.trim())
+            (!formData.referralUserName.trim() ||
+              !formData.referralPhoneNumber.trim())
           ) {
             if (!formData.referralUserName.trim()) {
               newErrors.referralUserName = "Referral user name is required";
             }
             if (!formData.referralPhoneNumber.trim()) {
-              newErrors.referralPhoneNumber = "Referral phone number is required";
+              newErrors.referralPhoneNumber =
+                "Referral phone number is required";
             }
             setErrors(newErrors);
             addToast({
@@ -626,7 +633,8 @@ export default function JobPostForm({
           });
           if (
             formData.source === "referral" &&
-            (!formData.referralUserName.trim() || !formData.referralPhoneNumber.trim())
+            (!formData.referralUserName.trim() ||
+              !formData.referralPhoneNumber.trim())
           ) {
             return false;
           }
@@ -716,6 +724,9 @@ export default function JobPostForm({
           formData.academyCommissionPercentage || "0",
           10,
         ),
+        settledAmount: formData.settledAmount
+          ? Number(formData.settledAmount)
+          : undefined,
         status: "open" as const,
       };
 
@@ -945,10 +956,17 @@ export default function JobPostForm({
                       nameValue={formData.referralUserName}
                       phoneValue={formData.referralPhoneNumber}
                       options={referralOptions}
-                      onNameChange={(value) => handleChange("referralUserName", value)}
-                      onPhoneChange={(value) => handleChange("referralPhoneNumber", value)}
+                      onNameChange={(value) =>
+                        handleChange("referralUserName", value)
+                      }
+                      onPhoneChange={(value) =>
+                        handleChange("referralPhoneNumber", value)
+                      }
                       isRequired
-                      isInvalid={!!errors.referralUserName || !!errors.referralPhoneNumber}
+                      isInvalid={
+                        !!errors.referralUserName ||
+                        !!errors.referralPhoneNumber
+                      }
                       errorMessage={errors.referralUserName}
                       phoneErrorMessage={errors.referralPhoneNumber}
                       className="md:col-span-2"
@@ -1139,7 +1157,7 @@ export default function JobPostForm({
                   />
                   <Input
                     label="Salary Range"
-                    placeholder="e.g., 50000-80000 or 50k/month"
+                    placeholder="e.g., 50k-80k/month or 6-8L/year"
                     type="text"
                     value={formData.salary}
                     onChange={(e) => handleChange("salary", e.target.value)}
@@ -1266,6 +1284,21 @@ export default function JobPostForm({
                     <span className="text-default-400 text-sm">%</span>
                   }
                   description="Enter a value between 0 and 100"
+                />
+                <Input
+                  label="Client Settled Amount"
+                  placeholder="e.g., 50000"
+                  type="number"
+                  min={0}
+                  value={formData.settledAmount}
+                  onChange={(e) =>
+                    handleChange("settledAmount", e.target.value)
+                  }
+                  variant="bordered"
+                  startContent={
+                    <FaRupeeSign size={18} className="text-default-400" />
+                  }
+                  description="The final amount agreed with the client."
                 />
                 <Textarea
                   label="Travel Requirements"

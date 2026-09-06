@@ -32,13 +32,17 @@ import {
   type TuitionShareData,
 } from "@/lib/utils/share";
 import ApplyActionButton from "@/components/ApplyActionButton";
+import { formatDisplayDate } from "@/lib/utils/display-date";
 
 export type ApplicationStatus =
   | "applied"
+  | "pending"
+  | "shortlisted"
   | "DC"
   | "GC"
   | "approved"
   | "decline"
+  | "declined"
   | "auto_declined"
   | "withdrawn";
 
@@ -76,6 +80,7 @@ interface TuitionPostProps {
   dcDate?: string;
   gcDate?: string;
   declineReason?: string;
+  startingDate?: string;
 }
 
 const getFrequencyText = (freq: number): string => {
@@ -153,6 +158,7 @@ const TuitionPost = ({
   dcDate,
   gcDate,
   declineReason,
+  startingDate,
 }: TuitionPostProps) => {
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -232,7 +238,6 @@ const TuitionPost = ({
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const dateOptions: Intl.DateTimeFormatOptions = {
-      weekday: "short",
       day: "numeric",
       month: "short",
       year: "numeric",
@@ -255,7 +260,9 @@ const TuitionPost = ({
       case "approved":
         return {
           label: "Approved! You have been selected for this tuition.",
-          subLabel: null,
+          subLabel: startingDate
+            ? `Tuition starts on ${formatDisplayDate(startingDate)}`
+            : null,
           color:
             "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/30",
           textColor: "text-green-800 dark:text-green-400",

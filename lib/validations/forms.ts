@@ -280,6 +280,7 @@ export const jobFormDefaults: {
   notes: string;
   commissionBasis: "first_month" | "project_value";
   academyCommissionPercentage: string;
+  settledAmount: string;
   projectType: string;
   budget: string;
   duration: string;
@@ -306,6 +307,7 @@ export const jobFormDefaults: {
   notes: "",
   commissionBasis: "first_month",
   academyCommissionPercentage: "25",
+  settledAmount: "",
   projectType: "",
   budget: "",
   duration: "",

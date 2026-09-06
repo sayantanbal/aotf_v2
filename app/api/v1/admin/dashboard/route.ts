@@ -164,6 +164,7 @@ async function getSuperAdminData(adminClerkId: string) {
       {
         $match: {
           isLatest: true,
+          postId: { $exists: true, $nin: [null, ""] },
           invoiceDate: { $gte: monthStart, $lte: monthEnd },
         },
       },

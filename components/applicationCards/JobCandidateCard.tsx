@@ -8,6 +8,7 @@ import { Checkbox } from "@heroui/checkbox";
 import { User } from "@heroui/user";
 import { Phone, Eye } from "lucide-react";
 import { formatPhone } from "@/lib/utils/phone";
+import { formatDisplayDate } from "@/lib/utils/display-date";
 
 export interface JobCandidate {
   id: string;
@@ -16,9 +17,21 @@ export interface JobCandidate {
   phone: string;
   applicantType?: "teacher" | "candidate";
   avatar?: string;
-  status: "applied" | "approved" | "decline" | "auto_declined" | "withdrawn";
+  status:
+    | "applied"
+    | "pending"
+    | "shortlisted"
+    | "approved"
+    | "decline"
+    | "declined"
+    | "auto_declined"
+    | "withdrawn";
   appliedDate: string;
   coverLetter?: string;
+  board?: string | null;
+  qualification?: string | null;
+  teachingExp?: string | null;
+  address?: string | null;
 }
 
 interface JobCandidateCardProps {
@@ -37,14 +50,17 @@ export const JobCandidateCard: React.FC<JobCandidateCardProps> = ({
   onSelectionChange,
 }) => {
   const getStatusColor = (
-    status: string
+    status: string,
   ): "default" | "primary" | "secondary" | "success" | "warning" | "danger" => {
     switch (status) {
       case "applied":
+      case "pending":
+      case "shortlisted":
         return "warning";
       case "approved":
         return "success";
       case "decline":
+      case "declined":
       case "auto_declined":
         return "danger";
       case "withdrawn":
@@ -57,10 +73,14 @@ export const JobCandidateCard: React.FC<JobCandidateCardProps> = ({
   const getStatusLabel = (status: string): string => {
     switch (status) {
       case "applied":
-        return "Applied";
+      case "pending":
+        return "Pending";
+      case "shortlisted":
+        return "Shortlisted";
       case "approved":
         return "Approved";
       case "decline":
+      case "declined":
         return "Declined";
       case "auto_declined":
         return "Auto Declined";
@@ -116,10 +136,19 @@ export const JobCandidateCard: React.FC<JobCandidateCardProps> = ({
               <Phone size={14} />
               <span>{formatPhone(candidate.phone)}</span>
             </div>
+            <div className="flex flex-wrap gap-2 text-xs text-default-500 mb-3">
+              {candidate.board && <span>Board: {candidate.board}</span>}
+              {candidate.qualification && (
+                <span>Qualification: {candidate.qualification}</span>
+              )}
+              {candidate.teachingExp && (
+                <span>Experience: {candidate.teachingExp} yrs</span>
+              )}
+            </div>
 
             <div className="flex items-center justify-between">
               <p className="text-xs text-default-400">
-                Applied: {new Date(candidate.appliedDate).toLocaleDateString()}
+                Applied: {formatDisplayDate(candidate.appliedDate)}
               </p>
               <Button
                 size="sm"

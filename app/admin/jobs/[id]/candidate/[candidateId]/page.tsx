@@ -22,6 +22,7 @@ import {
   useDisclosure,
 } from "@heroui/modal";
 import { User } from "@heroui/user";
+import { formatDisplayDate } from "@/lib/utils/display-date";
 import {
   ArrowLeft,
   Mail,
@@ -38,10 +39,13 @@ import {
 
 type ApplicationStatus =
   | "applied"
+  | "pending"
+  | "shortlisted"
   | "DC"
   | "GC"
   | "approved"
   | "decline"
+  | "declined"
   | "auto_declined"
   | "withdrawn";
 
@@ -53,6 +57,10 @@ type Application = {
     email: string;
     phone: string;
     avatarUrl?: string | null;
+    board?: string | null;
+    qualification?: string | null;
+    teachingExp?: string | null;
+    address?: string | null;
   };
   status: ApplicationStatus;
   appliedAt: string;
@@ -73,6 +81,10 @@ type Candidate = {
   status: ApplicationStatus;
   appliedDate: string;
   statusHistory: Array<{ status: string; date: string; notes?: string }>;
+  board?: string | null;
+  qualification?: string | null;
+  teachingExp?: string | null;
+  address?: string | null;
 };
 
 function buildCandidateFromApplication(app: Application): Candidate {
@@ -118,6 +130,10 @@ function buildCandidateFromApplication(app: Application): Candidate {
     email: app.applicantSnapshot.email,
     phone: app.applicantSnapshot.phone,
     avatar: app.applicantSnapshot.avatarUrl ?? undefined,
+    board: app.applicantSnapshot.board,
+    qualification: app.applicantSnapshot.qualification,
+    teachingExp: app.applicantSnapshot.teachingExp,
+    address: app.applicantSnapshot.address,
     status: app.status,
     appliedDate: app.appliedAt,
     statusHistory: history,
@@ -250,11 +266,21 @@ export default function JobCandidateDetailPage() {
   const handleUpdateStatus = async () => {
     setIsUpdating(true);
     try {
-      // No single-candidate update endpoint exists for jobs yet.
-      // Keep the UI functional by updating the local view state.
-
+      const res = await fetch(
+        `/api/v1/jobs/${postId}/applications/${candidateId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: selectedStatus,
+            reason: notes || undefined,
+          }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update status");
       addToast({
-        description: "Status updated locally.",
+        description: "Status updated successfully.",
         color: "success",
       });
 
@@ -290,6 +316,8 @@ export default function JobCandidateDetailPage() {
     switch (status) {
       case "pending":
         return "warning";
+      case "shortlisted":
+        return "primary";
       case "approved":
         return "success";
       case "declined":
@@ -303,8 +331,11 @@ export default function JobCandidateDetailPage() {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
+      case "applied":
       case "pending":
         return "Pending";
+      case "shortlisted":
+        return "Shortlisted";
       case "approved":
         return "Approved";
       case "declined":
@@ -319,13 +350,16 @@ export default function JobCandidateDetailPage() {
   // Recruitment checkpoints for jobs
   const checkpoints = [
     { id: "pending", label: "Application Received", status: "pending" },
+    { id: "shortlisted", label: "Shortlisted", status: "shortlisted" },
     { id: "approved", label: "Approved", status: "approved" },
   ];
 
   const getCheckpointStatus = (checkpointStatus: string) => {
-    const statusOrder = ["pending", "approved"];
+    const statusOrder = ["pending", "shortlisted", "approved"];
     const currentIndex = statusOrder.indexOf(
-      currentCandidate.status === "approved" ? "approved" : "pending",
+      currentCandidate.status === "declined"
+        ? "pending"
+        : currentCandidate.status,
     );
     const checkpointIndex = statusOrder.indexOf(checkpointStatus);
 
@@ -417,6 +451,35 @@ export default function JobCandidateDetailPage() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-default-500">Board studied</p>
+              <p className="font-medium">
+                {currentCandidate.board || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-default-500">Qualification</p>
+              <p className="font-medium">
+                {currentCandidate.qualification || "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-default-500">Experience</p>
+              <p className="font-medium">
+                {currentCandidate.teachingExp
+                  ? `${currentCandidate.teachingExp} yrs`
+                  : "Not provided"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-default-500">Address</p>
+              <p className="font-medium">
+                {currentCandidate.address || "Not provided"}
+              </p>
+            </div>
+          </div>
+
           {/* Professional Information */}
           {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center gap-3">
@@ -451,7 +514,7 @@ export default function JobCandidateDetailPage() {
               <div>
                 <p className="text-xs text-default-500">Applied Date</p>
                 <p className="font-medium text-default-700">
-                  {new Date(candidate.appliedDate).toLocaleDateString()}
+                  {formatDisplayDate(candidate.appliedDate)}
                 </p>
               </div>
             </div>
@@ -574,7 +637,7 @@ export default function JobCandidateDetailPage() {
                         .filter((h: any) => h.status === checkpoint.status)
                         .map((history: any, idx: number) => (
                           <p className="text-sm text-default-500">
-                            {new Date(history.date).toLocaleDateString()}
+                            {formatDisplayDate(history.date)}
                           </p>
                         ))}
                     </div>
@@ -599,6 +662,7 @@ export default function JobCandidateDetailPage() {
             onValueChange={setSelectedStatus}
           >
             <Radio value="pending">Pending</Radio>
+            <Radio value="shortlisted">Shortlisted</Radio>
             <Radio value="approved">Approved</Radio>
             <Radio value="declined">Declined</Radio>
             <Radio value="withdrawn">Withdrawn</Radio>

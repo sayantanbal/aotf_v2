@@ -53,6 +53,9 @@ export interface IJob extends Document {
   status: JobStatus;
   commissionBasis: CommissionBasis;
   academyCommissionPercentage: number;
+  settledAmount?: number;
+  invoiceGenerated?: boolean;
+  invoiceId?: string;
   createdByAdminClerkId?: string;
   updatedByAdminClerkId?: string;
   createdByAdminId?: mongoose.Types.ObjectId;
@@ -124,6 +127,13 @@ const JobSchema = new Schema<IJob>(
       type: Number,
       required: true,
     },
+    settledAmount: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+    invoiceGenerated: { type: Boolean, default: false },
+    invoiceId: { type: String, default: null },
     createdByAdminClerkId: {
       type: String,
       default: null,
@@ -211,6 +221,18 @@ if (!Job.schema.path("skillsRequired")) {
 
 if (!Job.schema.path("travelRequirements")) {
   Job.schema.add({ travelRequirements: { type: String } });
+}
+
+if (!Job.schema.path("settledAmount")) {
+  Job.schema.add({ settledAmount: { type: Number, min: 0, default: null } });
+}
+
+if (!Job.schema.path("invoiceGenerated")) {
+  Job.schema.add({ invoiceGenerated: { type: Boolean, default: false } });
+}
+
+if (!Job.schema.path("invoiceId")) {
+  Job.schema.add({ invoiceId: { type: String, default: null } });
 }
 
 export default Job;

@@ -91,7 +91,7 @@ export default function ViewJobPostPage({
         if (!jobRes.ok) {
           const data = await jobRes.json().catch(() => ({}));
           throw new Error(
-            data.error || `Failed to fetch job (${jobRes.status})`
+            data.error || `Failed to fetch job (${jobRes.status})`,
           );
         }
         const { job } = await jobRes.json();
@@ -110,14 +110,18 @@ export default function ViewJobPostPage({
               status: app.status === "applied" ? "applied" : app.status,
               appliedDate: app.appliedAt ?? app.createdAt,
               coverLetter: app.coverLetter,
-            })
+              board: app.applicantSnapshot?.board ?? null,
+              qualification: app.applicantSnapshot?.qualification ?? null,
+              teachingExp: app.applicantSnapshot?.teachingExp ?? null,
+              address: app.applicantSnapshot?.address ?? null,
+            }),
           );
           setCandidates(mapped);
         }
       } catch (err) {
-      reportClientError(err, { feature: "admin-job-detail" });
+        reportClientError(err, { feature: "admin-job-detail" });
         setFetchError(
-          err instanceof Error ? err.message : "Failed to fetch job"
+          err instanceof Error ? err.message : "Failed to fetch job",
         );
       } finally {
         setIsLoading(false);
@@ -216,9 +220,14 @@ export default function ViewJobPostPage({
     const hasApproved = candidates.some((c) => c.status === "approved");
 
     const approved = candidates.filter((c) => c.status === "approved");
-    const applied = candidates.filter((c) => c.status === "applied");
+    const applied = candidates.filter(
+      (c) =>
+        c.status === "applied" ||
+        c.status === "pending" ||
+        c.status === "shortlisted",
+    );
     const declined = candidates.filter(
-      (c) => c.status === "decline" || c.status === "auto_declined"
+      (c) => c.status === "decline" || c.status === "auto_declined",
     );
     const withdrawn = candidates.filter((c) => c.status === "withdrawn");
 
@@ -544,7 +553,7 @@ export default function ViewJobPostPage({
                             isSelected={selectedIds.has(candidate.id)}
                             onSelectionChange={handleSelectionChange}
                           />
-                        )
+                        ),
                       )}
                     </div>
                   </AccordionItem>

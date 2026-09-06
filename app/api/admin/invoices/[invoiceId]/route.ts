@@ -2,6 +2,7 @@ import { handleApiError } from "@/lib/api-utils";
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Invoice from "@/lib/models/Invoice";
+import Job from "@/lib/models/Job";
 import { auth } from "@clerk/nextjs/server";
 import Admin from "@/lib/models/Admin";
 import { logActivity } from "@/lib/admin/logActivity";
@@ -26,7 +27,9 @@ export async function GET(
 
     return NextResponse.json({ success: true, invoice });
   } catch (error) {
-    return handleApiError(error, "GET /api/admin/invoices/[invoiceId]", { legacyAdminShape: true });
+    return handleApiError(error, "GET /api/admin/invoices/[invoiceId]", {
+      legacyAdminShape: true,
+    });
   }
 }
 
@@ -51,6 +54,21 @@ export async function PUT(
         { status: 404 },
       );
     }
+
+    const linkedJob = existing.postId
+      ? await Job.findOne({ jobId: existing.postId }).lean<{
+          settledAmount?: number;
+          academyCommissionPercentage: number;
+        }>()
+      : null;
+    const calculatedJobFee = linkedJob
+      ? Math.round(
+          (((Number(linkedJob.settledAmount) || 0) *
+            Number(linkedJob.academyCommissionPercentage || 0)) /
+            100) *
+            100,
+        ) / 100
+      : null;
 
     const {
       recipientName,
@@ -78,7 +96,8 @@ export async function PUT(
 
     if (recipientName !== undefined) existing.recipient.name = recipientName;
     if (recipientPhone !== undefined) existing.recipient.phone = recipientPhone;
-    if (recipientAddress !== undefined) existing.recipient.address = recipientAddress;
+    if (recipientAddress !== undefined)
+      existing.recipient.address = recipientAddress;
     if (recipientEmail !== undefined) existing.recipient.email = recipientEmail;
 
     if (Array.isArray(items) && items.length > 0) {
@@ -104,12 +123,19 @@ export async function PUT(
     if (currency !== undefined) existing.amount.currency = String(currency);
     if (taxPercentage !== undefined)
       existing.amount.taxPercentage = Number(taxPercentage) || 0;
-    if (taxAmount !== undefined) existing.amount.taxAmount = Number(taxAmount) || 0;
-    if (subTotal !== undefined) existing.amount.subTotal = Number(subTotal) || 0;
-    if (grandTotal !== undefined)
-      existing.amount.grandTotal = Number(grandTotal) || 0;
+    if (taxAmount !== undefined)
+      existing.amount.taxAmount = Number(taxAmount) || 0;
+    if (subTotal !== undefined)
+      existing.amount.subTotal = Number(subTotal) || 0;
+    if (grandTotal !== undefined || calculatedJobFee !== null)
+      existing.amount.grandTotal =
+        calculatedJobFee ?? (Number(grandTotal) || 0);
+    if (calculatedJobFee !== null) existing.amount.subTotal = calculatedJobFee;
 
-    if (assignedTeacherName !== undefined || assignedTeacherPhone !== undefined) {
+    if (
+      assignedTeacherName !== undefined ||
+      assignedTeacherPhone !== undefined
+    ) {
       existing.assignedTeacher = {
         name: assignedTeacherName ?? existing.assignedTeacher?.name ?? "",
         phone: assignedTeacherPhone ?? existing.assignedTeacher?.phone,
@@ -119,7 +145,11 @@ export async function PUT(
     // ── Partial payment calculation ─────────────────────────────────────────
     let partialPayment = existing.partialPayment;
     if (paymentStatus === "partial") {
-      const total = grandTotal !== undefined ? Number(grandTotal) || 0 : existing.amount.grandTotal;
+      const total =
+        calculatedJobFee ??
+        (grandTotal !== undefined
+          ? Number(grandTotal) || 0
+          : existing.amount.grandTotal);
       let amountPaid = 0;
       let pctPaid = 0;
 
@@ -137,7 +167,10 @@ export async function PUT(
         partialPayment = existing.partialPayment;
       }
 
-      if (partialAmountPaid !== undefined || partialPercentagePaid !== undefined) {
+      if (
+        partialAmountPaid !== undefined ||
+        partialPercentagePaid !== undefined
+      ) {
         partialPayment = {
           amountPaid: Math.round(amountPaid * 100) / 100,
           percentagePaid: Math.round(pctPaid * 100) / 100,
@@ -147,10 +180,7 @@ export async function PUT(
       }
     } else {
       // If status changed away from partial, clear partial data
-      if (
-        paymentStatus === "paid" ||
-        paymentStatus === "unpaid"
-      ) {
+      if (paymentStatus === "paid" || paymentStatus === "unpaid") {
         partialPayment = undefined;
       }
     }
@@ -193,7 +223,9 @@ export async function PUT(
 
     return NextResponse.json({ success: true, invoice: existing });
   } catch (error) {
-    return handleApiError(error, "PUT /api/admin/invoices/[invoiceId]", { legacyAdminShape: true });
+    return handleApiError(error, "PUT /api/admin/invoices/[invoiceId]", {
+      legacyAdminShape: true,
+    });
   }
 }
 
@@ -217,6 +249,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: "Invoice deleted" });
   } catch (error) {
-    return handleApiError(error, "DELETE /api/admin/invoices/[invoiceId]", { legacyAdminShape: true });
+    return handleApiError(error, "DELETE /api/admin/invoices/[invoiceId]", {
+      legacyAdminShape: true,
+    });
   }
 }

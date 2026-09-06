@@ -145,6 +145,11 @@ const createJobBaseSchema = z.object({
     .min(0, "Commission percentage cannot be negative")
     .max(100, "Commission percentage cannot exceed 100"),
 
+  settledAmount: z.coerce
+    .number()
+    .min(0, "Settled amount cannot be negative")
+    .optional(),
+
   enquiryId: z.string().optional(),
   createdByAdminClerkId: z.string().optional(),
   createdByAdminId: z.string().optional(),

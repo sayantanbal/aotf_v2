@@ -14,6 +14,9 @@ import {
   type JobShareData,
 } from "@/lib/utils/share";
 import ApplyActionButton from "@/components/ApplyActionButton";
+import { formatDisplayDate } from "@/lib/utils/display-date";
+import { addToast } from "@heroui/toast";
+import { useState } from "react";
 
 interface JobPostProps {
   jobId: string;
@@ -35,6 +38,9 @@ interface JobPostProps {
   status: "open" | "closed" | "hold" | "cancelled";
   createdAt: Date;
   initialApplied?: boolean;
+  applicationStatus?: string;
+  applicationId?: string;
+  startingDate?: string;
   isSignedIn?: boolean;
   canApply?: boolean;
   applicantCount?: number;
@@ -103,6 +109,9 @@ const JobPost = ({
   duration,
   status,
   initialApplied = false,
+  applicationStatus,
+  applicationId,
+  startingDate,
   isSignedIn,
   canApply,
   createdAt,
@@ -110,6 +119,55 @@ const JobPost = ({
   createdByUserId = {},
 }: JobPostProps) => {
   const router = useRouter();
+  const [currentStatus, setCurrentStatus] = useState(applicationStatus);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+
+  const canWithdraw = Boolean(
+    applicationId &&
+    currentStatus &&
+    ["pending", "shortlisted", "applied"].includes(currentStatus),
+  );
+
+  const handleWithdraw = async () => {
+    if (!applicationId) return;
+    setIsWithdrawing(true);
+    try {
+      const response = await fetch(`/api/v1/me/applications/${applicationId}`, {
+        method: "DELETE",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok)
+        throw new Error(data.error || "Failed to withdraw application");
+      setCurrentStatus("withdrawn");
+      addToast({
+        description: "Application withdrawn successfully",
+        color: "success",
+      });
+    } catch (error) {
+      addToast({
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to withdraw application",
+        color: "danger",
+      });
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
+
+  const statusFeedback =
+    currentStatus === "approved"
+      ? `Approved${startingDate ? ` · Starts ${formatDisplayDate(startingDate)}` : ""}`
+      : currentStatus === "shortlisted"
+        ? "Shortlisted for review"
+        : currentStatus === "declined"
+          ? "Your application was not selected"
+          : currentStatus === "withdrawn"
+            ? "You withdrew this application"
+            : currentStatus === "pending" || currentStatus === "applied"
+              ? "Application received"
+              : null;
 
   const handleShare = () => {
     const shareData: JobShareData = {
@@ -152,6 +210,11 @@ const JobPost = ({
           </Chip>
         </div>
       </CardHeader>
+      {statusFeedback && (
+        <div className="mx-3 mb-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          {statusFeedback}
+        </div>
+      )}
 
       {/* BODY */}
       <CardBody className="px-3 py-0 text-small text-default-500">
@@ -179,6 +242,13 @@ const JobPost = ({
           <div className="shrink-0 w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary flex items-center justify-center transition-colors group-hover:bg-primary group-hover:text-white">
             <FaMapMarkerAlt size={20} />
           </div>
+          {applicationStatus && (
+            <span className="rounded-full bg-default-100 px-2 py-1 text-xs font-medium capitalize">
+              {applicationStatus === "declined"
+                ? "Declined"
+                : applicationStatus}
+            </span>
+          )}
           <div>
             <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
               Location
@@ -200,7 +270,10 @@ const JobPost = ({
                 {workType === "job" ? "Salary" : "Budget"}
               </p>
               <p className="text-sm font-medium text-slate-900 dark:text-slate-100 leading-snug">
-                {workType === "job" ? salary : budget}
+                <span className="inline-flex items-center gap-1">
+                  <BsCurrencyRupee size={14} />
+                  {workType === "job" ? salary : budget}
+                </span>
                 {workType === "project" && duration && ` (${duration})`}
               </p>
             </div>
@@ -247,16 +320,29 @@ const JobPost = ({
           <Button size="sm" color="secondary" onClick={handleShare}>
             Share <FaShare />
           </Button>
-          <ApplyActionButton
-            target="job"
-            targetId={jobId}
-            initialApplied={initialApplied}
-            isSignedIn={isSignedIn}
-            isEligible={canApply}
-            ineligibleLabel="Candidates Only"
-            size="sm"
-            color="primary"
-          />
+          {canWithdraw ? (
+            <Button
+              size="sm"
+              color="danger"
+              variant="flat"
+              onPress={handleWithdraw}
+              isLoading={isWithdrawing}
+            >
+              Withdraw
+            </Button>
+          ) : (
+            <ApplyActionButton
+              target="job"
+              targetId={jobId}
+              initialApplied={initialApplied && currentStatus !== "withdrawn"}
+              onApplied={() => setCurrentStatus("pending")}
+              isSignedIn={isSignedIn}
+              isEligible={canApply}
+              ineligibleLabel="Candidates Only"
+              size="sm"
+              color="primary"
+            />
+          )}
         </div>
       </CardFooter>
     </Card>

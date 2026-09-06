@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useEffect, useRef, useState } from "react";
 import JobPost from "@/components/PostCards/JobPost";
@@ -180,7 +180,7 @@ export default function JobInfiniteFeed({
             duration={job.duration}
             brief={job.brief}
             status={job.status}
-            createdAt={job.createdAt?.toString()}
+            createdAt={job.createdAt ? new Date(job.createdAt) : new Date(0)}
             createdByUserId={{
               name: job.author?.name,
               avatar: job.author?.avatarUrl,
@@ -196,7 +196,10 @@ export default function JobInfiniteFeed({
       ))}
 
       {pagination.page < pagination.totalPages ? (
-        <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-4">
+        <div
+          ref={sentinelRef}
+          className="flex flex-col items-center gap-2 py-4"
+        >
           {isLoadingMore ? (
             <p className="text-sm text-default-400">Loading more jobs...</p>
           ) : (

@@ -12,10 +12,13 @@ export type ApplicantType = (typeof APPLICANT_TYPES)[number];
 
 export const APPLICATION_STATUSES = [
   "applied",
+  "pending",
+  "shortlisted",
   "DC",
   "GC",
   "approved",
   "decline",
+  "declined",
   "auto_declined",
   "withdrawn",
 ] as const;
@@ -226,16 +229,19 @@ ApplicationSchema.post("save", function (doc) {
 ApplicationSchema.post("findOneAndUpdate", function (doc) {
   if (!doc) return;
   const input = mapApplication(
-    typeof doc.toObject === "function" ? doc.toObject() : (doc as unknown as Record<string, any>),
+    typeof doc.toObject === "function"
+      ? doc.toObject()
+      : (doc as unknown as Record<string, any>),
   );
   if (input) void upsertCalendarEvent(input);
 });
 
 ApplicationSchema.post("findOneAndDelete", function (doc) {
   if (!doc) return;
-  const raw = typeof doc.toObject === "function"
-    ? doc.toObject()
-    : (doc as unknown as Record<string, any>);
+  const raw =
+    typeof doc.toObject === "function"
+      ? doc.toObject()
+      : (doc as unknown as Record<string, any>);
   const id = raw._id?.toString?.() ?? "";
   const isTuition = typeof raw.postId === "string" && raw.postId;
   if (isTuition) {

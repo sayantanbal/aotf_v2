@@ -4,6 +4,7 @@ import Post, { type PostStatus, type IPost } from "@/lib/models/Post";
 import Enquiry from "@/lib/models/Enquiry";
 import Invoice from "@/lib/models/Invoice";
 import Referral from "@/lib/models/Referral";
+import Application from "@/lib/models/Application";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { escapeRegex } from "@/lib/utils";
 import {
@@ -43,6 +44,14 @@ export type PostWithEnquiryReference = PostLean & {
   referralUserName?: string | null;
   author?: AdminAuthorSummary | null;
   invoiceId?: string | null;
+  applicantCount?: number;
+  applicationStats?: {
+    pending: number;
+    approved: number;
+    declined: number;
+    withdrawn: number;
+    total: number;
+  };
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -93,7 +102,8 @@ function normalizeStudents(
 
 async function attachEnquiryReferences<
   T extends { enquiryId?: mongoose.Types.ObjectId | string | null },
->(posts: T[]): Promise<Array<T & { enquiryReferenceId: string | null }>> {  const linkedEnquiryIds = Array.from(
+>(posts: T[]): Promise<Array<T & { enquiryReferenceId: string | null }>> {
+  const linkedEnquiryIds = Array.from(
     new Set(
       posts
         .map((post) => post.enquiryId?.toString())
@@ -143,9 +153,13 @@ async function attachPostAuthors<
   }));
 }
 
-async function attachReferralDetails<
-  T extends { postId: string },
->(posts: T[]): Promise<Array<T & { referralUserName: string | null; referralPhoneNumber: string | null }>> {
+async function attachReferralDetails<T extends { postId: string }>(
+  posts: T[],
+): Promise<
+  Array<
+    T & { referralUserName: string | null; referralPhoneNumber: string | null }
+  >
+> {
   const postIds = posts.map((post) => post.postId);
   if (postIds.length === 0) {
     return posts.map((post) => ({
@@ -167,13 +181,14 @@ async function attachReferralDetails<
   return posts.map((post) => ({
     ...post,
     referralUserName: referralMap.get(post.postId)?.referralUserName ?? null,
-    referralPhoneNumber: referralMap.get(post.postId)?.referralPhoneNumber ?? null,
+    referralPhoneNumber:
+      referralMap.get(post.postId)?.referralPhoneNumber ?? null,
   }));
 }
 
-async function attachInvoiceIds<
-  T extends { postId: string },
->(posts: T[]): Promise<Array<T & { invoiceId: string | null }>> {
+async function attachInvoiceIds<T extends { postId: string }>(
+  posts: T[],
+): Promise<Array<T & { invoiceId: string | null }>> {
   const postIds = posts.map((post) => post.postId);
   if (postIds.length === 0) {
     return posts.map((post) => ({ ...post, invoiceId: null }));
@@ -181,11 +196,11 @@ async function attachInvoiceIds<
 
   const invoices = await Invoice.find(
     { postId: mongoose.trusted({ $in: postIds }), isLatest: true },
-    { postId: 1, invoiceId: 1 }
+    { postId: 1, invoiceId: 1 },
   ).lean();
 
   const invoiceMap = new Map(
-    invoices.map((inv) => [inv.postId, inv.invoiceId])
+    invoices.map((inv) => [inv.postId, inv.invoiceId]),
   );
 
   return posts.map((post) => ({
@@ -244,7 +259,9 @@ export async function getPostByPostId(
   }
 
   const [postWithEnquiryReference] = await attachEnquiryReferences([post]);
-  const [postWithReferral] = await attachReferralDetails([postWithEnquiryReference]);
+  const [postWithReferral] = await attachReferralDetails([
+    postWithEnquiryReference,
+  ]);
   const [enrichedPost] = await attachPostAuthors([postWithReferral]);
   const [withInvoice] = await attachInvoiceIds([enrichedPost]);
   return withInvoice;
@@ -264,7 +281,9 @@ export async function getPostById(
   }
 
   const [postWithEnquiryReference] = await attachEnquiryReferences([post]);
-  const [postWithReferral] = await attachReferralDetails([postWithEnquiryReference]);
+  const [postWithReferral] = await attachReferralDetails([
+    postWithEnquiryReference,
+  ]);
   const [enrichedPost] = await attachPostAuthors([postWithReferral]);
   const [withInvoice] = await attachInvoiceIds([enrichedPost]);
   return withInvoice;
@@ -278,7 +297,17 @@ export async function listPosts(
 ): Promise<PaginatedPosts> {
   await dbConnect();
 
-  const { status, page, limit, search, subjects, boards, classType, minBudget, maxBudget } = input;
+  const {
+    status,
+    page,
+    limit,
+    search,
+    subjects,
+    boards,
+    classType,
+    minBudget,
+    maxBudget,
+  } = input;
 
   // Build filter
   const filter: Record<string, unknown> = {};
@@ -362,12 +391,74 @@ export async function listPosts(
   ]);
 
   const postsWithEnquiryReferences = await attachEnquiryReferences(posts);
-  const postsWithReferral = await attachReferralDetails(postsWithEnquiryReferences);
+  const postsWithReferral = await attachReferralDetails(
+    postsWithEnquiryReferences,
+  );
   const enrichedPosts = await attachPostAuthors(postsWithReferral);
   const finalPosts = await attachInvoiceIds(enrichedPosts);
+  const postIds = posts.map((post) => post.postId);
+  const applicationRows = postIds.length
+    ? await Application.collection
+        .aggregate<{
+          _id: string;
+          total: number;
+          pending: number;
+          approved: number;
+          declined: number;
+          withdrawn: number;
+        }>([
+          { $match: { postId: { $in: postIds } } },
+          {
+            $group: {
+              _id: "$postId",
+              total: { $sum: 1 },
+              pending: {
+                $sum: {
+                  $cond: [
+                    { $in: ["$status", ["applied", "pending", "DC", "GC"]] },
+                    1,
+                    0,
+                  ],
+                },
+              },
+              approved: {
+                $sum: { $cond: [{ $eq: ["$status", "approved"] }, 1, 0] },
+              },
+              declined: {
+                $sum: {
+                  $cond: [
+                    { $in: ["$status", ["decline", "auto_declined"]] },
+                    1,
+                    0,
+                  ],
+                },
+              },
+              withdrawn: {
+                $sum: { $cond: [{ $eq: ["$status", "withdrawn"] }, 1, 0] },
+              },
+            },
+          },
+        ])
+        .toArray()
+    : [];
+  const applicationMap = new Map(applicationRows.map((row) => [row._id, row]));
 
   return {
-    posts: finalPosts.map(p => ({ ...p, invoiceGenerated: p.invoiceGenerated || !!p.invoiceId })),
+    posts: finalPosts.map((post) => {
+      const stats = applicationMap.get(post.postId);
+      return {
+        ...post,
+        invoiceGenerated: post.invoiceGenerated || !!post.invoiceId,
+        applicantCount: stats?.total ?? 0,
+        applicationStats: {
+          pending: stats?.pending ?? 0,
+          approved: stats?.approved ?? 0,
+          declined: stats?.declined ?? 0,
+          withdrawn: stats?.withdrawn ?? 0,
+          total: stats?.total ?? 0,
+        },
+      };
+    }),
     pagination: {
       page,
       limit,
