@@ -56,7 +56,7 @@ export function CalendarHeader({ view, events }: IProps) {
                 aria-label="View by day"
                 isIconOnly
                 variant={view === "day" ? "solid" : "flat"}
-                className="rounded-r-none [&_svg]:size-5"
+                className="rounded-r-none [&_svg]:size-5 hidden sm:inline-flex"
               >
                 <Link href="/admin/day-view">
                   <List strokeWidth={1.8} />
@@ -66,7 +66,7 @@ export function CalendarHeader({ view, events }: IProps) {
                 aria-label="View by week"
                 isIconOnly
                 variant={view === "week" ? "solid" : "flat"}
-                className="-ml-px rounded-none [&_svg]:size-5"
+                className="-ml-px rounded-none [&_svg]:size-5 hidden sm:inline-flex"
               >
                 <Link href="/admin/week-view">
                   <Columns strokeWidth={1.8} />

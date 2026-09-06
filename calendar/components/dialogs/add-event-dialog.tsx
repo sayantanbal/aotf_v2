@@ -88,8 +88,19 @@ export function AddEventDialog({ children, startDate, startTime }: IProps) {
   });
 
   const trigger = isValidElement(children)
-    ? cloneElement(children as ReactElement<{ onPress?: () => void }>, {
-        onPress: onToggle,
+    ? cloneElement(children as ReactElement<any>, {
+        onClick: (e: any) => {
+          (children as ReactElement<any>).props?.onClick?.(e);
+          onToggle();
+        },
+        ...(typeof children.type !== "string"
+          ? {
+              onPress: (e: any) => {
+                (children as ReactElement<any>).props?.onPress?.(e);
+                onToggle();
+              },
+            }
+          : {}),
       })
     : children;
 

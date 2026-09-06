@@ -132,10 +132,14 @@ export function EventDetailsDialog({ event, children }: IProps) {
           (children as ReactElement<any>).props?.onClick?.(e);
           onToggle();
         },
-        onPress: (e: any) => {
-          (children as ReactElement<any>).props?.onPress?.(e);
-          onToggle();
-        },
+        ...(typeof children.type !== "string"
+          ? {
+              onPress: (e: any) => {
+                (children as ReactElement<any>).props?.onPress?.(e);
+                onToggle();
+              },
+            }
+          : {}),
       })
     : children;
 

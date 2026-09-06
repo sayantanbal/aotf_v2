@@ -80,6 +80,9 @@ type JobRow = {
   status?: string;
   invoiceGenerated?: boolean;
   invoiceId?: string;
+  invoicePaymentStatus?: string;
+  invoicePaymentDate?: string;
+  settledAmount?: number | null;
 };
 
 type SummaryResponse = {
@@ -120,7 +123,11 @@ function isTuitionPaid(post: TuitionPostRow) {
 }
 
 function isJobPaid(job: JobRow) {
-  return Boolean(job.invoiceGenerated);
+  return (
+    job.invoicePaymentStatus === "paid" ||
+    job.invoicePaymentStatus === "partial" ||
+    (typeof job.settledAmount === "number" && job.settledAmount > 0)
+  );
 }
 
 function monthLabel(value: string) {

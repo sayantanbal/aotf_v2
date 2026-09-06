@@ -1286,6 +1286,7 @@ export default function JobPostForm({
                   description="Enter a value between 0 and 100"
                 />
                 <Input
+                  isRequired
                   label="Client Settled Amount"
                   placeholder="e.g., 50000"
                   type="number"

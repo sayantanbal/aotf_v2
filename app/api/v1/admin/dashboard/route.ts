@@ -82,10 +82,16 @@ async function getSuperAdminData(adminClerkId: string) {
       { $group: { _id: "$currentStatus", count: { $sum: 1 } } },
     ]),
 
-    // Revenue: sum of paid payments
-    Payment.aggregate([
-      { $match: { status: "paid" } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
+    // Revenue: sum of paid invoices (all time)
+    Invoice.aggregate([
+      {
+        $match: {
+          isLatest: true,
+          paymentStatus: "paid",
+          invoiceId: { $not: /^INV-(PAYOUT|REF)-/ },
+        },
+      },
+      { $group: { _id: null, total: { $sum: "$amount.grandTotal" } } },
     ]),
 
     // Admins by role
@@ -111,15 +117,22 @@ async function getSuperAdminData(adminClerkId: string) {
     // Posts by status
     Post.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
 
-    // Revenue trend — daily totals for last 30 days
-    Payment.aggregate([
-      { $match: { status: "paid", paidAt: { $gte: thirtyDaysAgo } } },
+    // Revenue trend — daily totals for last 30 days from paid invoices
+    Invoice.aggregate([
+      { 
+        $match: { 
+          isLatest: true,
+          paymentStatus: "paid",
+          invoiceId: { $not: /^INV-(PAYOUT|REF)-/ },
+          paymentDate: { $gte: thirtyDaysAgo } 
+        } 
+      },
       {
         $group: {
           _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$paidAt" },
+            $dateToString: { format: "%Y-%m-%d", date: "$paymentDate" },
           },
-          total: { $sum: "$amount" },
+          total: { $sum: "$amount.grandTotal" },
         },
       },
       { $sort: { _id: 1 } },
@@ -164,8 +177,9 @@ async function getSuperAdminData(adminClerkId: string) {
       {
         $match: {
           isLatest: true,
-          postId: { $exists: true, $nin: [null, ""] },
-          invoiceDate: { $gte: monthStart, $lte: monthEnd },
+          paymentStatus: "paid",
+          invoiceId: { $not: /^INV-(PAYOUT|REF)-/ },
+          paymentDate: { $gte: monthStart, $lte: monthEnd },
         },
       },
       {

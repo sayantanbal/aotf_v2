@@ -185,7 +185,7 @@ export default async function JobDetailPage({
         {(isProject ? job.budget : job.salary) && (
           <div className="flex items-baseline gap-2 mb-4">
             <h2 className="text-primary text-[26px] font-bold tracking-tight truncate max-w-full">
-              {isProject ? job.budget : job.salary}
+              ₹ {isProject ? job.budget : job.salary}
             </h2>
             {isProject && job.duration && (
               <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">

@@ -84,21 +84,45 @@ const mkEvt = (
 
 // ─── Main fetcher ─────────────────────────────────────────────────────────
 
+async function fetchAdminImages(admins: any[]): Promise<Map<string, string>> {
+  const clerkIds = admins.map((a: any) => a.clerkId).filter(Boolean);
+  const map = new Map<string, string>();
+  if (clerkIds.length === 0) return map;
+  
+  try {
+    const { clerkClient } = await import("@clerk/nextjs/server");
+    const client = await clerkClient();
+    const clerkUsers = await client.users.getUserList({ userId: clerkIds });
+    for (const u of clerkUsers.data) {
+      if (u.imageUrl) map.set(u.id, u.imageUrl);
+    }
+  } catch (err) {
+    console.error("[calendar/requests] fetchAdminImages error:", err);
+  }
+  return map;
+}
+
 export async function getEvents(): Promise<IEvent[]> {
   try {
     _idCounter = 1;
     await dbConnect();
     const events: IEvent[] = [];
 
-    // ── Admin map ─────────────────────────────────────────────────────────
-    const admins = await Admin.find({ isActive: true, terminatedAt: null })
+    // Fetch all admins so everyone appears in the list
+    const admins = await Admin.find({})
       .select("name _id clerkId")
       .lean() as any[];
+
+    const clerkImages = await fetchAdminImages(admins);
 
     const adminById = new Map<string, IUser>();
     const adminByClerkId = new Map<string, IUser>();
     for (const a of admins) {
-      const u: IUser = { id: a._id.toString(), name: a.name ?? "Admin", picturePath: null };
+      const u: IUser = { 
+        id: a._id.toString(), 
+        name: a.name ?? "Admin", 
+        picturePath: a.clerkId ? (clerkImages.get(a.clerkId) ?? null) : null 
+      };
       adminById.set(a._id.toString(), u);
       if (a.clerkId) adminByClerkId.set(a.clerkId, u);
     }
@@ -306,15 +330,18 @@ export async function getEvents(): Promise<IEvent[]> {
 export async function getUsers(): Promise<IUser[]> {
   try {
     await dbConnect();
-    const admins = await Admin.find({ isActive: true, terminatedAt: null })
-      .select("name _id")
+    const admins = await Admin.find({})
+      .select("name _id clerkId")
       .lean() as any[];
+      
+    const clerkImages = await fetchAdminImages(admins);
+
     return [
       SYS,
       ...admins.map((a) => ({
         id: a._id.toString(),
         name: a.name ?? "Admin",
-        picturePath: null,
+        picturePath: a.clerkId ? (clerkImages.get(a.clerkId) ?? null) : null,
       })),
     ];
   } catch {
