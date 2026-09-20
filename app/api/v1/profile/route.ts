@@ -137,13 +137,28 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ error: "Select at least one subject" }, { status: 400 });
       }
       const uniqueSubjects = Array.from(new Set(subjects));
-      const count = await Subject.countDocuments({
-        $or: uniqueSubjects.map((key) => ({ key })),
-      });
-      if (count !== uniqueSubjects.length) {
+      const validSubjects = await Subject.find({
+        $or: [
+          { key: { $in: uniqueSubjects } },
+          { label: { $in: uniqueSubjects } }
+        ]
+      }).select("key label").lean();
+
+      const invalidSubjects = uniqueSubjects.filter(
+        (subject) => !validSubjects.some((vs) => vs.key === subject || vs.label === subject)
+      );
+
+      if (invalidSubjects.length > 0) {
         return NextResponse.json({ error: "One or more subjects are invalid" }, { status: 400 });
       }
-      updateFields.subjects = uniqueSubjects;
+
+      const finalKeys = new Set(
+        uniqueSubjects.map((subject) => {
+          const matched = validSubjects.find((vs) => vs.key === subject || vs.label === subject);
+          return matched!.key;
+        })
+      );
+      updateFields.subjects = Array.from(finalKeys);
     }
 
     // Ensure User + Profile exist (self-heals if the Clerk webhook was delayed)

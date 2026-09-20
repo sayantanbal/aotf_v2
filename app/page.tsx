@@ -80,13 +80,13 @@ export default async function Home() {
         >
           <LeadershipCard
             name="Tutu Rani Ghosh"
-            role="Founder"
+            role="Founder & CEO"
             image="./founder.jpeg"
             quote="Vision drives everything."
           />
           <LeadershipCard
             name="Soumyadip Ghosh"
-            role="CEO"
+            role="Admin"
             image="./ceo.jpeg"
             quote="Execution is key to success."
           />

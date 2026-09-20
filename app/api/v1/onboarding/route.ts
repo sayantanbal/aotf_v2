@@ -117,17 +117,34 @@ export async function PATCH(req: Request) {
 
     await dbConnect();
 
+    let finalSubjects: string[] | undefined;
     if (subjects !== undefined) {
       if (!Array.isArray(subjects) || subjects.length === 0 || subjects.length > 20) {
         return NextResponse.json({ error: "Select at least one subject" }, { status: 400 });
       }
       const uniqueSubjects = Array.from(new Set(subjects));
-      const count = await Subject.countDocuments({
-        $or: uniqueSubjects.map((key) => ({ key })),
-      });
-      if (count !== uniqueSubjects.length) {
+      const validSubjects = await Subject.find({
+        $or: [
+          { key: { $in: uniqueSubjects } },
+          { label: { $in: uniqueSubjects } }
+        ]
+      }).select("key label").lean();
+
+      const invalidSubjects = uniqueSubjects.filter(
+        (subject) => !validSubjects.some((vs) => vs.key === subject || vs.label === subject)
+      );
+
+      if (invalidSubjects.length > 0) {
         return NextResponse.json({ error: "One or more subjects are invalid" }, { status: 400 });
       }
+
+      const finalKeys = new Set(
+        uniqueSubjects.map((subject) => {
+          const matched = validSubjects.find((vs) => vs.key === subject || vs.label === subject);
+          return matched!.key;
+        })
+      );
+      finalSubjects = Array.from(finalKeys);
     }
 
     // Ensure User + Profile exist (self-heals if the Clerk webhook was delayed)
@@ -142,7 +159,7 @@ export async function PATCH(req: Request) {
     if (qualification !== undefined) updateFields.qualification = qualification;
     if (board !== undefined) updateFields.board = board;
     if (normalizedGender !== undefined) updateFields.gender = normalizedGender;
-    if (subjects !== undefined) updateFields.subjects = subjects;
+    if (finalSubjects !== undefined) updateFields.subjects = finalSubjects;
     if (plan !== undefined) updateFields.plan = plan;
     // Refresh the 72-hour TTL on every save while payment hasn't happened
     updateFields.expiresAt = user.paymentCompleted
@@ -160,7 +177,7 @@ export async function PATCH(req: Request) {
     );
 
     const profileUpdate: Record<string, unknown> = {};
-    if (subjects !== undefined) profileUpdate.subjects = subjects;
+    if (finalSubjects !== undefined) profileUpdate.subjects = finalSubjects;
     if (normalizedGender !== undefined) profileUpdate.gender = normalizedGender;
     if (Object.keys(profileUpdate).length > 0) {
       await Profile.updateOne({ clerkId }, { $set: profileUpdate });
