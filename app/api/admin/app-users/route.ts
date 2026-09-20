@@ -124,6 +124,7 @@ function buildAggregationPipeline(
   statusQuery: Record<string, unknown>,
   adminClerkIds: Set<string>,
   search: string,
+  clerkSearchIds: string[] = [],
   baseMatch: Record<string, unknown> = {},
 ) {
   const pipeline: any[] = [
@@ -152,14 +153,20 @@ function buildAggregationPipeline(
     pipeline.push({
       $unwind: { path: "$profile", preserveNullAndEmptyArrays: true },
     });
+    const orConditions: any[] = [
+      { username: searchRegex },
+      { "profile.displayName": searchRegex },
+      { "profile.phone": searchRegex },
+      { "profile.whatsapp": searchRegex },
+    ];
+
+    if (clerkSearchIds.length > 0) {
+      orConditions.push({ clerkId: { $in: clerkSearchIds } });
+    }
+
     pipeline.push({
       $match: {
-        $or: [
-          { username: searchRegex },
-          { "profile.displayName": searchRegex },
-          { "profile.phone": searchRegex },
-          { "profile.whatsapp": searchRegex },
-        ],
+        $or: orConditions,
       },
     });
   }
@@ -173,6 +180,7 @@ async function fetchRolePage(
   statusQuery: Record<string, unknown>,
   adminClerkIds: Set<string>,
   search: string,
+  clerkSearchIds: string[] = [],
 ) {
   const dbRole = toDbRole(friendlyRole);
   const limit = PAGE_SIZE;
@@ -181,6 +189,7 @@ async function fetchRolePage(
     statusQuery,
     adminClerkIds,
     search,
+    clerkSearchIds,
     { role: dbRole },
   );
 
@@ -321,8 +330,9 @@ async function buildGlobalSummary(
   statusQuery: Record<string, unknown>,
   adminClerkIds: Set<string>,
   search: string,
+  clerkSearchIds: string[] = [],
 ) {
-  const pipeline = buildAggregationPipeline(statusQuery, adminClerkIds, search);
+  const pipeline = buildAggregationPipeline(statusQuery, adminClerkIds, search, clerkSearchIds);
 
   pipeline.push({
     $group: {
@@ -463,12 +473,24 @@ async function get(req: Request) {
   const adminClerkIds = await getAdminClerkIds();
   const statusQuery = buildStatusQuery(filters.status);
   const search = normalizeText(filters.search);
-  const summary = await buildGlobalSummary(statusQuery, adminClerkIds, search);
+
+  let clerkSearchIds: string[] = [];
+  if (search) {
+    try {
+      const client = await clerkClient();
+      const clerkUsers = await client.users.getUserList({ query: search });
+      clerkSearchIds = clerkUsers.data.map((u) => u.id);
+    } catch (err) {
+      console.error("[app-users] Clerk search failed:", err);
+    }
+  }
+
+  const summary = await buildGlobalSummary(statusQuery, adminClerkIds, search, clerkSearchIds);
 
   if (filters.bundle === "1") {
     const [teacherPage, candidatePage] = await Promise.all([
-      fetchRolePage("teacher", 1, statusQuery, adminClerkIds, search),
-      fetchRolePage("candidate", 1, statusQuery, adminClerkIds, search),
+      fetchRolePage("teacher", 1, statusQuery, adminClerkIds, search, clerkSearchIds),
+      fetchRolePage("candidate", 1, statusQuery, adminClerkIds, search, clerkSearchIds),
     ]);
 
     return NextResponse.json({
@@ -489,6 +511,7 @@ async function get(req: Request) {
     statusQuery,
     adminClerkIds,
     search,
+    clerkSearchIds,
   );
 
   return NextResponse.json({
