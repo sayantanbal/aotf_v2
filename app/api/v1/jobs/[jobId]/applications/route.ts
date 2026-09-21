@@ -136,12 +136,14 @@ export async function POST(
       qualification?: string | null;
       teachingExp?: string | null;
       address?: string | null;
+      subjects?: string[];
     }>();
     const onboarding = await OnboardingDetails.findOne({ clerkId }).lean<{
       board?: string | null;
       qualification?: string | null;
       teachingExp?: string | null;
       address?: string | null;
+      subjects?: string[];
     }>();
 
     if (!profile) {
@@ -181,6 +183,7 @@ export async function POST(
         fallbackName ||
         profile.username?.trim() ||
         "User",
+      username: profile.username ?? null,
       email: primaryEmail,
       phone,
       avatarUrl: clerkUser.imageUrl || null,
@@ -188,6 +191,7 @@ export async function POST(
       qualification: profile.qualification?.trim() || onboarding?.qualification || null,
       teachingExp: profile.teachingExp ?? onboarding?.teachingExp ?? null,
       address: profile.address?.trim() || onboarding?.address || null,
+      subjects: profile.subjects ?? onboarding?.subjects ?? [],
     };
 
     const application = await createJobApplication({

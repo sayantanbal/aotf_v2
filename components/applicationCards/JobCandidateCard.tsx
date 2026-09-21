@@ -7,12 +7,16 @@ import { Button } from "@heroui/button";
 import { Checkbox } from "@heroui/checkbox";
 import { User } from "@heroui/user";
 import { Phone, Eye } from "lucide-react";
+import { Popover, PopoverTrigger, PopoverContent } from "@heroui/popover";
+import Image from "next/image";
 import { formatPhone } from "@/lib/utils/phone";
 import { formatDisplayDate } from "@/lib/utils/display-date";
+import { useRouter } from "next/navigation";
 
 export interface JobCandidate {
   id: string;
   name: string;
+  username?: string | null;
   email: string;
   phone: string;
   applicantType?: "teacher" | "candidate";
@@ -32,6 +36,7 @@ export interface JobCandidate {
   qualification?: string | null;
   teachingExp?: string | null;
   address?: string | null;
+  subjects?: string[];
 }
 
 interface JobCandidateCardProps {
@@ -49,6 +54,8 @@ export const JobCandidateCard: React.FC<JobCandidateCardProps> = ({
   isSelected = false,
   onSelectionChange,
 }) => {
+  const router = useRouter();
+
   const getStatusColor = (
     status: string,
   ): "default" | "primary" | "secondary" | "success" | "warning" | "danger" => {
@@ -113,13 +120,42 @@ export const JobCandidateCard: React.FC<JobCandidateCardProps> = ({
                   size="sm"
                 />
               )}
-              <User
-                avatarProps={{
-                  src: candidate.avatar,
-                }}
-                name={candidate.name}
-                description={`${candidate.phone}`}
-              />
+              <Popover placement="bottom" showArrow>
+                <PopoverTrigger>
+                  <div className="cursor-pointer hover:opacity-80 transition-opacity">
+                    <User
+                      avatarProps={{ src: candidate.avatar }}
+                      name={`${candidate.name}`}
+                      description={`${candidate.phone}`}
+                    />
+                  </div>
+                </PopoverTrigger>
+                <PopoverContent>
+                  <div className="px-1 py-2 flex flex-col gap-2 min-w-[120px]">
+                    <Button size="sm" variant="light" onPress={() => candidate.username && router.push(`/u/${encodeURIComponent(candidate.username)}`)}>
+                      View Profile
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="light"
+                      startContent={<Phone size={14} />}
+                      onPress={() => (window.location.href = `tel:${candidate.phone}`)}
+                      className="justify-start"
+                    >
+                      Call
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="light"
+                      onPress={() => window.open(`https://wa.me/${formatPhone(candidate.phone).replace(/\D/g, "")}`)}
+                      className="justify-start"
+                    >
+                      <Image src="/whatsapp.svg" width={14} height={14} alt="WA" />
+                      WhatsApp
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <Chip
               size="sm"
@@ -139,6 +175,9 @@ export const JobCandidateCard: React.FC<JobCandidateCardProps> = ({
               )}
               {candidate.teachingExp && (
                 <span>Experience: {candidate.teachingExp} yrs</span>
+              )}
+              {candidate.subjects && candidate.subjects.length > 0 && (
+                <span>Subjects: {candidate.subjects.join(", ")}</span>
               )}
             </div>
 

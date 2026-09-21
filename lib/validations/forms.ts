@@ -230,7 +230,7 @@ export const tuitionFormDefaults: {
   source: SourceKey;
   referralUserName: string;
   referralPhoneNumber: string;
-  students: { class: string; subject: string; board: string }[];
+  students: { class: string; subjects: string[]; board: string }[];
   missingSubjects: string[];
   remuneration: string;
   classType: "in-person" | "online" | "both";
@@ -246,7 +246,7 @@ export const tuitionFormDefaults: {
   source: "just_dial",
   referralUserName: "",
   referralPhoneNumber: "",
-  students: [{ class: "", subject: "", board: "" }],
+  students: [{ class: "", subjects: [], board: "" }],
   missingSubjects: [],
   remuneration: "",
   classType: "in-person",
@@ -320,7 +320,7 @@ export const jobFormDefaults: {
 
 export const studentFormSchema = z.object({
   class: z.string().min(1, "Class is required"),
-  subject: z.string().min(1, "Subject is required"),
+  subjects: z.array(z.string()).min(1, "At least one subject is required"),
   board: z.string().min(1, "Board is required"),
 });
 

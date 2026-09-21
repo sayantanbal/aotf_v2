@@ -97,7 +97,7 @@ async function get(
 
   const user = await User.findOne(
     { _id: profile.userId },
-    "clerkId role plan onboardingCompleted status createdAt",
+    "clerkId role plan onboardingCompleted paymentCompleted status createdAt",
   );
 
   if (!user || user.status === "deleted") {
@@ -162,9 +162,9 @@ async function get(
     location: profile.location || profile.address,
     joinDate: formatDisplayDate(user.createdAt),
     expiryDate: "—",
-    isVerified: Boolean(user.onboardingCompleted),
+    isVerified: Boolean(user.paymentCompleted),
     plan: planLabel,
-    status: user.status === "blocked" ? "suspended" : "active",
+    status: user.status === "blocked" ? "suspended" : (user.paymentCompleted ? "active" : "in_progress"),
     profileUrl: `/u/${encodeURIComponent(profile.username)}`,
   };
 

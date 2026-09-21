@@ -12,13 +12,18 @@ import {
   BookOpen,
   BriefcaseBusiness,
   MapPin,
+  Phone,
 } from "lucide-react";
+import Image from "next/image";
+import { Popover, PopoverTrigger, PopoverContent } from "@heroui/popover";
 import { formatPhone } from "@/lib/utils/phone";
 import { useRouter } from "next/navigation";
 import { formatDisplayDate } from "@/lib/utils/display-date";
+import { formatSubjectLabel } from "@/lib/utils/subject";
 export interface Candidate {
   id: string;
   name: string;
+  username?: string | null;
   email: string;
   phone: string;
   applicantType?: "teacher" | "candidate";
@@ -40,6 +45,7 @@ export interface Candidate {
   qualification?: string | null;
   teachingExp?: string | null;
   address?: string | null;
+  subjects?: string[];
 }
 
 interface CandidateCardProps {
@@ -129,16 +135,42 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
                   size="sm"
                 />
               )}
-              {/* onClick push the user to the user profile without reload using useRouter */}
-              <User
-                onClick={() => router.push(`/profile/${candidate.id}`)}
-                style={{ cursor: "pointer" }}
-                avatarProps={{
-                  src: candidate.avatar,
-                }}
-                name={`${candidate.name}`}
-                description={`${candidate.phone}`}
-              />
+              <Popover placement="bottom" showArrow>
+                <PopoverTrigger>
+                  <div className="cursor-pointer hover:opacity-80 transition-opacity">
+                    <User
+                      avatarProps={{ src: candidate.avatar }}
+                      name={`${candidate.name}`}
+                      description={`${candidate.phone}`}
+                    />
+                  </div>
+                </PopoverTrigger>
+                <PopoverContent>
+                  <div className="px-1 py-2 flex flex-col gap-2 min-w-[120px]">
+                    <Button size="sm" variant="light" onPress={() => candidate.username && router.push(`/u/${encodeURIComponent(candidate.username)}`)}>
+                      View Profile
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="light"
+                      startContent={<Phone size={14} />}
+                      onPress={() => (window.location.href = `tel:${candidate.phone}`)}
+                      className="justify-start"
+                    >
+                      Call
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="light"
+                      onPress={() => window.open(`https://wa.me/${formatPhone(candidate.phone).replace(/\D/g, "")}`)}
+                      className="justify-start"
+                    >
+                      <Image src="/whatsapp.svg" width={14} height={14} alt="WA" />
+                      WhatsApp
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <Chip
               size="sm"
@@ -181,7 +213,17 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:col-span-2">
+            {candidate.subjects && candidate.subjects.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {candidate.subjects.map((sub, idx) => (
+                  <Chip key={idx} size="sm" variant="flat" color="secondary" className="text-[10px]">
+                    {formatSubjectLabel(sub)}
+                  </Chip>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-1.5 sm:col-span-2 mt-1">
               <MapPin size={13} className="text-default-400 shrink-0" />
               <span className="font-medium text-default-700 truncate">
                 {candidate.address?.trim() || "N/A"}
@@ -201,7 +243,7 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
           startContent={<Eye size={16} />}
           onPress={() => onViewDetails(candidate)}
         >
-          View Details
+          Application Details
         </Button>
       </CardFooter>
     </Card>

@@ -50,7 +50,7 @@ const frequencyLabel = (n: number): string => {
 export function formatTuitionShare(data: TuitionShareData): string {
   const lines: string[] = [
     `▫️ *Class: ${data.className} (${data.board.toUpperCase()})*`,
-    `▫️ *Subject: ${data.subjects.toUpperCase()}*`,
+    `▫️ *Subject: ${data.subjects}*`,
     `▫️ *Budget: ${data.monthlyBudget ? `₹${data.monthlyBudget.toLocaleString("en-IN")}/month` : "To be Discussed"}*`,
     `▫️ Class Type: *${classTypeLabel[data.classType] ?? data.classType}*`,
     `▫️ Frequency: *${frequencyLabel(data.frequencyPerWeek)}*`,

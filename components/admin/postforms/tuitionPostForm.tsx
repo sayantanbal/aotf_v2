@@ -413,10 +413,10 @@ export default function TuitionPostForm({
           students: post.students?.length
             ? post.students.map((s: any) => ({
                 class: s.className || "",
-                subject: s.subjects?.[0] || "",
+                subjects: s.subjects || [],
                 board: s.board || "",
               }))
-            : [{ class: "", subject: "", board: "" }],
+            : [{ class: "", subjects: [], board: "" }],
           remuneration: post.monthlyBudget?.toString() || "",
           classType: (classTypeFromApi[post.classType] ||
             "in-person") as ClassType,
@@ -468,7 +468,7 @@ export default function TuitionPostForm({
   const handleGuardianPhoneChange = (value: string) =>
     handleChange("guardianPhone", normalizePhone(value));
 
-  const handleStudentChange = (index: number, field: string, value: string) => {
+  const handleStudentChange = (index: number, field: string, value: any) => {
     const newStudents = [...formData.students];
     newStudents[index] = { ...newStudents[index], [field]: value };
     setFormData((prev) => ({ ...prev, students: newStudents }));
@@ -486,7 +486,7 @@ export default function TuitionPostForm({
     } else {
       setFormData((prev) => ({
         ...prev,
-        students: [...prev.students, { class: "", subject: "", board: "" }],
+        students: [...prev.students, { class: "", subjects: [], board: "" }],
       }));
     }
   };
@@ -499,8 +499,8 @@ export default function TuitionPostForm({
       students: [
         ...prev.students,
         copyPrevious
-          ? { class: last.class, subject: last.subject, board: last.board }
-          : { class: "", subject: "", board: "" },
+          ? { class: last.class, subjects: last.subjects, board: last.board }
+          : { class: "", subjects: [], board: "" },
       ],
     }));
   };
@@ -729,7 +729,7 @@ export default function TuitionPostForm({
       const mappedStudents = formData.students.map((s) => ({
         className: s.class.trim(),
         board: s.board.trim(),
-        subjects: [s.subject.trim()],
+        subjects: s.subjects,
       }));
 
       const payload: Record<string, unknown> = {
@@ -1072,29 +1072,35 @@ export default function TuitionPostForm({
                           ))}
                         </Autocomplete>
 
-                        <Autocomplete
-                          label="Subject"
-                          placeholder="Search subject"
-                          selectedKey={student.subject}
-                          onSelectionChange={(key) => {
-                            const value = key as string;
-                            if (value === ADD_NEW_VALUE) {
+                        <Select
+                          selectionMode="multiple"
+                          label="Subjects"
+                          placeholder="Select subjects"
+                          selectedKeys={new Set(student.subjects)}
+                          onSelectionChange={(keys) => {
+                            const vals = Array.from(keys) as string[];
+                            if (vals.includes(ADD_NEW_VALUE)) {
                               setIsSubjectManagerOpen(true);
+                              handleStudentChange(
+                                index,
+                                "subjects",
+                                vals.filter((v) => v !== ADD_NEW_VALUE)
+                              );
                               return;
                             }
-                            handleStudentChange(index, "subject", value);
+                            handleStudentChange(index, "subjects", vals);
                           }}
                           isRequired
-                          isInvalid={!!errors[`students.${index}.subject`]}
-                          errorMessage={errors[`students.${index}.subject`]}
+                          isInvalid={!!errors[`students.${index}.subjects`]}
+                          errorMessage={errors[`students.${index}.subjects`]}
                           variant="bordered"
                         >
                           {[{ key: ADD_NEW_VALUE, label: "➕ Add new option" }, ...combinedSubjects].map((sub) => (
-                            <AutocompleteItem key={sub.key}>
+                            <SelectItem key={sub.key}>
                               {sub.label}
-                            </AutocompleteItem>
+                            </SelectItem>
                           ))}
-                        </Autocomplete>
+                        </Select>
                       </div>
                     </div>
                   </Card>
@@ -1388,7 +1394,7 @@ export default function TuitionPostForm({
                                       Subject:
                                     </span>{" "}
                                     <span className="font-medium">
-                                      {student.subject}
+                                      {student.subjects.join(", ")}
                                     </span>
                                   </div>
                                   <div>
@@ -1555,8 +1561,8 @@ export default function TuitionPostForm({
               </p>
               <p>
                 <span className="font-medium">Subject:</span>{" "}
-                {formData.students[formData.students.length - 1]?.subject ||
-                  "—"}
+                {formData.students[formData.students.length - 1]?.subjects.join(", ") ||
+                  "Not selected"}
               </p>
               <p>
                 <span className="font-medium">Board:</span>{" "}

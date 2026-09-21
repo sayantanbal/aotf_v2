@@ -45,7 +45,7 @@ interface VerifiedPerson {
   expiryDate: string;
   isVerified: boolean;
   plan?: string;
-  status: "active" | "expired" | "suspended";
+  status: "active" | "expired" | "suspended" | "in_progress";
   profileUrl?: string;
 }
 
@@ -55,6 +55,7 @@ type VerifyState =
   | { kind: "expired"; person: VerifiedPerson }
   | { kind: "suspended"; person: VerifiedPerson }
   | { kind: "not_found" }
+  | { kind: "in_progress"; person: VerifiedPerson }
   | { kind: "error"; message: string };
 
 function maskPhoneForPublicView(phone: string): string {
@@ -100,7 +101,7 @@ const statusConfig: Record<
     bg: "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800",
     label: "Verified & Active",
     description:
-      "This ID card is valid and the holder is an active member of Academy of Tutorials and Freelancers.",
+      "This profile is valid and the holder is an active member of Academy of Tutorials and Freelancers.",
   },
   expired: {
     icon: ShieldAlert,
@@ -108,7 +109,7 @@ const statusConfig: Record<
     bg: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800",
     label: "Expired",
     description:
-      "This ID card has expired. The holder was previously a member but needs to renew.",
+      "This profile has expired. The holder was previously a member but needs to renew.",
   },
   suspended: {
     icon: ShieldX,
@@ -116,7 +117,15 @@ const statusConfig: Record<
     bg: "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800",
     label: "Suspended",
     description:
-      "This ID card has been suspended. Please contact AOTF for more information.",
+      "This profile has been suspended. Please contact AOTF for more information.",
+  },
+  in_progress: {
+    icon: Clock,
+    color: "text-blue-500",
+    bg: "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800",
+    label: "Verification in Progress",
+    description:
+      "This profile is currently under review.",
   },
 };
 
@@ -149,6 +158,8 @@ export default function VerifyPage() {
               setState({ kind: "expired", person });
             } else if (person.status === "suspended") {
               setState({ kind: "suspended", person });
+            } else if (person.status === "in_progress") {
+              setState({ kind: "in_progress", person });
             } else {
               setState({ kind: "verified", person });
             }
@@ -225,10 +236,11 @@ export default function VerifyPage() {
           </Card>
         )}
 
-        {/* ─── Verified / Expired / Suspended ─── */}
+        {/* ─── Verified / Expired / Suspended / In Progress ─── */}
         {(state.kind === "verified" ||
           state.kind === "expired" ||
-          state.kind === "suspended") && (
+          state.kind === "suspended" ||
+          state.kind === "in_progress") && (
           <VerificationResult person={state.person} />
         )}
 
@@ -344,7 +356,9 @@ function VerificationResult({ person }: { person: VerifiedPerson }) {
                   ? "bg-green-100 dark:bg-green-900/30"
                   : person.status === "expired"
                     ? "bg-amber-100 dark:bg-amber-900/30"
-                    : "bg-red-100 dark:bg-red-900/30"
+                    : person.status === "suspended"
+                      ? "bg-red-100 dark:bg-red-900/30"
+                      : "bg-blue-100 dark:bg-blue-900/30"
               }`}
             >
               <StatusIcon size={24} className={sc.color} />
@@ -356,13 +370,15 @@ function VerificationResult({ person }: { person: VerifiedPerson }) {
           </div>
 
           {/* Timestamp */}
-          <div className="flex items-center gap-1.5 text-[10px] text-default-400 mb-1">
+          {person.status !== "in_progress" && (
+            <div className="flex items-center gap-1.5 text-[10px] text-default-400 mb-1">
             <Clock size={10} />
             <span>
               Verified on{" "}
               {formatDisplayDateTime(new Date())}
             </span>
           </div>
+          )}
         </CardBody>
       </Card>
 

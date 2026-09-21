@@ -1,3 +1,5 @@
+import ShareButton from "@/components/ShareButton";
+import { formatSubjectsList } from "@/lib/utils/subject";
 import { Button } from "@heroui/button";
 import { Card, CardHeader } from "@heroui/card";
 import { FaHome } from "react-icons/fa";
@@ -90,7 +92,7 @@ export default async function PostDetailPage({
 
   const safeStudents = post.students ?? [];
   const allSubjects = safeStudents.flatMap((s) => s.subjects);
-  const subjectDisplay = allSubjects.join(", ");
+  const subjectDisplay = formatSubjectsList(allSubjects) || "N/A";
   const classDisplay = safeStudents.map((s) => s.className).join(", ");
   const boardDisplay = safeStudents.map((s) => s.board).join(", ");
   const statusBadge = getStatusBadge(post.status);
@@ -98,13 +100,26 @@ export default async function PostDetailPage({
   const isEdited =
     Boolean(post.updatedByAdminClerkId) ||
     new Date(post.updatedAt).getTime() - new Date(post.createdAt).getTime() >
-      EDITED_THRESHOLD_MS;
+    EDITED_THRESHOLD_MS;
 
   const freqText =
     post.frequencyPerWeek === 7
       ? "Daily"
       : `${post.frequencyPerWeek} Days Per Week`;
 
+
+  const shareData = {
+    postId: post.postId,
+    className: classDisplay || "N/A",
+    board: boardDisplay || "N/A",
+    subjects: subjectDisplay,
+    monthlyBudget: post.monthlyBudget,
+    classType: post.classType,
+    frequencyPerWeek: post.frequencyPerWeek,
+    preferredDays: post.preferredDays,
+    location: post.location,
+    notes: post.notes,
+  };
   return (
     <div className="w-full max-w-xl p-2 space-y-4">
       <BackButton title="Post Details" />
@@ -212,7 +227,7 @@ export default async function PostDetailPage({
               {post.preferredDays.join(", ") || "Not specified"}
             </span>
           </div>
-          <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700">
+          <div className="flex gap-3 justify-between items-center border-b border-gray-100 dark:border-gray-700">
             <span className="text-gray-500 dark:text-gray-400 text-sm">
               Subjects
             </span>
@@ -244,10 +259,7 @@ export default async function PostDetailPage({
 
       {/* Action Buttons */}
       <div className=" flex gap-4 max-w-xl mx-auto z-10">
-        <Button className="w-full" size="lg">
-          <SlShare size={18} className="inline-block mr-2" />
-          Share
-        </Button>
+        <ShareButton type="tuition" data={shareData} className="w-full" />
 
         <ApplyActionButton
           target="post"

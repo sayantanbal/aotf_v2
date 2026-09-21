@@ -28,6 +28,7 @@ import {
   shareOnWhatsApp,
   type TuitionShareData,
 } from "@/lib/utils/share";
+import { formatSubjectsList } from "@/lib/utils/subject";
 
 export interface TuitionPostStudent {
   className: string;
@@ -121,7 +122,7 @@ export const TuitionPostCard: React.FC<TuitionPostCardProps> = ({
   // Derive display values from students array
   const safeStudents = post.students ?? [];
   const allSubjects = safeStudents.flatMap((s) => s.subjects);
-  const subjectDisplay = allSubjects.join(", ") || "N/A";
+  const subjectDisplay = formatSubjectsList(allSubjects) || "N/A";
   const classDisplay = safeStudents.map((s) => s.className).join(", ");
   const boardDisplay = safeStudents.map((s) => s.board).join(", ");
   const title = `${subjectDisplay} - Class ${classDisplay}`;

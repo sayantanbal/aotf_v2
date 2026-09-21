@@ -1,4 +1,4 @@
-import { Button } from "@heroui/button";
+import ShareButton from "@/components/ShareButton";
 import { Card, CardHeader } from "@heroui/card";
 import { User } from "@heroui/user";
 import { LuNotebookText } from "react-icons/lu";
@@ -153,6 +153,18 @@ export default async function JobDetailPage({
     job.gender === "all" || job.gender === "both"
       ? "All Genders"
       : `${job.gender.charAt(0).toUpperCase() + job.gender.slice(1)} Only`;
+
+  const shareData = {
+    jobId: job.jobId,
+    title: job.title,
+    companyName: displayCompanyName || undefined,
+    location: job.location,
+    salary: job.salary,
+    budget: job.budget,
+    requiredQualification: job.requiredQualification,
+    gender: job.gender,
+    workType: job.workType,
+  };
 
   return (
     <div className="w-full max-w-xl p-2 space-y-4 mb-10">
@@ -369,10 +381,7 @@ export default async function JobDetailPage({
 
       {/* ── Action Buttons ──────────────────────────────────────── */}
       <div className="flex gap-4 max-w-xl mx-auto z-10">
-        <Button className="w-full" size="lg">
-          <SlShare size={18} className="inline-block mr-2" />
-          Share
-        </Button>
+        <ShareButton type="job" data={shareData} className="w-full" />
         <ApplyActionButton
           target="job"
           targetId={id}

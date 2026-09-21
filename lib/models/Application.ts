@@ -29,6 +29,7 @@ export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 export interface IApplicantSnapshot {
   name: string;
+  username?: string | null;
   email: string;
   phone: string;
   avatarUrl?: string | null;
@@ -36,11 +37,13 @@ export interface IApplicantSnapshot {
   qualification?: string | null;
   teachingExp?: string | null;
   address?: string | null;
+  subjects?: string[];
 }
 
 const ApplicantSnapshotSchema = new Schema<IApplicantSnapshot>(
   {
     name: { type: String, required: true },
+    username: { type: String, default: null },
     email: { type: String, required: true },
     phone: { type: String, required: true },
     avatarUrl: { type: String, default: null },
@@ -48,6 +51,7 @@ const ApplicantSnapshotSchema = new Schema<IApplicantSnapshot>(
     qualification: { type: String, default: null },
     teachingExp: { type: String, default: null },
     address: { type: String, default: null },
+    subjects: { type: [String], default: [] },
   },
   { _id: false },
 );

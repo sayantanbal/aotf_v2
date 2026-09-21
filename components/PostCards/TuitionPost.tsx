@@ -33,6 +33,7 @@ import {
 } from "@/lib/utils/share";
 import ApplyActionButton from "@/components/ApplyActionButton";
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/utils/display-date";
+import { formatSubjectsList } from "@/lib/utils/subject";
 
 export type ApplicationStatus =
   | "applied"
@@ -209,7 +210,7 @@ const TuitionPost = ({
   // Derive display values from students array (defensive fallback)
   const safeStudents = students ?? [];
   const allSubjects = safeStudents.flatMap((s) => s.subjects);
-  const subjectDisplay = allSubjects.join(", ") || "N/A";
+  const subjectDisplay = formatSubjectsList(allSubjects) || "N/A";
   const classDisplay = safeStudents.map((s) => s.className).join(", ");
   const boardDisplay = safeStudents.map((s) => s.board).join(", ");
 
@@ -223,7 +224,7 @@ const TuitionPost = ({
       postId,
       className: classDisplay || "N/A",
       board: boardDisplay || "N/A",
-      subjects: allSubjects.join(", ") || "N/A",
+      subjects: subjectDisplay,
       monthlyBudget,
       classType,
       frequencyPerWeek,

@@ -155,6 +155,7 @@ export default function ViewJobPostPage({
             (app: Record<string, any>) => ({
               id: app.applicationId ?? app._id,
               name: app.applicantSnapshot?.name ?? "Unknown",
+              username: app.applicantSnapshot?.username ?? null,
               email: app.applicantSnapshot?.email ?? "",
               phone: app.applicantSnapshot?.phone ?? "",
               avatar: app.applicantSnapshot?.avatarUrl ?? undefined,
@@ -166,6 +167,7 @@ export default function ViewJobPostPage({
               qualification: app.applicantSnapshot?.qualification ?? null,
               teachingExp: app.applicantSnapshot?.teachingExp ?? null,
               address: app.applicantSnapshot?.address ?? null,
+              subjects: app.applicantSnapshot?.subjects ?? [],
             }),
           );
           setCandidates(mapped);
