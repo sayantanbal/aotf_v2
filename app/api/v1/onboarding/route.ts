@@ -122,6 +122,9 @@ export async function PATCH(req: Request) {
       if (!Array.isArray(subjects) || subjects.length === 0 || subjects.length > 20) {
         return NextResponse.json({ error: "Select at least one subject" }, { status: 400 });
       }
+      if (!subjects.every((s) => typeof s === "string")) {
+        return NextResponse.json({ error: "Invalid subjects format" }, { status: 400 });
+      }
       const uniqueSubjects = Array.from(new Set(subjects));
       const validSubjects = await Subject.find({
         $or: [
