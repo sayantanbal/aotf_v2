@@ -99,6 +99,10 @@ export default function Onboarding() {
   );
   const [whatsappDone, setWhatsappDone] = useState(false);
 
+  // Validation error state
+  const [step1Error, setStep1Error] = useState<string | null>(null);
+
+
   // Pre-fill form from DB on mount; also determine initial step
   useEffect(() => {
     const meta = (user as any)?.publicMetadata as
@@ -439,7 +443,24 @@ export default function Onboarding() {
       saveOnboardingDetails(formData.plan || undefined);
   };
 
-  const validateStep = (step: number): boolean => {
+  const handleFinalStepCompleted = async () => {
+    setCurrentStep(5);
+    // Wait for saves to finish before redirecting
+    const promises = [];
+    if (!profileSaved && !isSaving) promises.push(saveProfile());
+    if (!onboardingDetailsSaved && !isSavingOnboarding)
+      promises.push(saveOnboardingDetails(formData.plan || undefined));
+    
+    await Promise.all(promises);
+    
+    if (user) {
+      await user.reload();
+      await session?.reload();
+      window.location.href = `/u/${user.username}`;
+    }
+  };
+
+  const checkStep = (step: number): boolean => {
     if (step === 1) {
       const result = onboardingStep1Schema.safeParse({
         phone: formData.phone,
@@ -452,6 +473,22 @@ export default function Onboarding() {
         gender: formData.gender,
       });
       return result.success;
+    }
+    if (step === 2) {
+      return !!formData.plan;
+    }
+    return false;
+  };
+
+  const validateStep = (step: number): boolean => {
+    if (step === 1) {
+      const isValid = checkStep(1);
+      if (!isValid) {
+        setStep1Error("Please fill all required fields correctly.");
+        return false;
+      }
+      setStep1Error(null);
+      return true;
     }
     if (step === 2) {
       return (
@@ -727,8 +764,9 @@ export default function Onboarding() {
               step={currentStep}
               isStepAvailable={isStepAvailable}
               onStepChange={handleStepChange}
+              onFinalStepCompleted={handleFinalStepCompleted}
               validateStep={validateStep}
-              checkStep={validateStep}
+              checkStep={checkStep}
               nextButtonProps={
                 currentStep === 3 || currentStep === 4
                   ? { style: { display: "none" } }
@@ -738,6 +776,11 @@ export default function Onboarding() {
               {/* ── STEP 1: Personal & Professional Details ─── */}
               <Step>
                 <div className="space-y-3">
+                  {step1Error && (
+                    <div className="p-3 rounded-lg bg-danger-50 border border-danger-200 text-danger text-sm text-center">
+                      {step1Error}
+                    </div>
+                  )}
                   <PhoneFields
                     phone={formData.phone}
                     whatsapp={formData.whatsapp}
