@@ -606,7 +606,10 @@ export default function Onboarding() {
               reject(err);
             }
           },
-          prefill: { contact: formData.phone },
+          prefill: { 
+            contact: formData.phone,
+            email: user?.primaryEmailAddress?.emailAddress || "",
+          },
           modal: { ondismiss: () => reject(new Error("Payment cancelled")) },
         };
         const RazorpayClass = (
@@ -709,13 +712,7 @@ export default function Onboarding() {
             </p>
             <div className="flex flex-col items-center gap-2 pt-2">
               <a
-                href="mailto:support@aotf.in"
-                className="text-primary font-semibold underline"
-              >
-                support@aotf.in
-              </a>
-              <a
-                href="https://wa.me/919876543210"
+                href="https://wa.me/916290338214"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-success font-semibold underline"

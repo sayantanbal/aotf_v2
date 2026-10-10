@@ -257,6 +257,7 @@ export default function ProfilePage() {
           },
           prefill: {
             contact: profile.phone ?? undefined,
+            email: email || "",
           },
           modal: {
             ondismiss: () => reject(new Error("Payment cancelled")),
