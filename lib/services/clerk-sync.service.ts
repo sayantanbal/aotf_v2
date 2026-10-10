@@ -33,6 +33,12 @@ export async function syncUserMetadataToClerk(clerkId: string) {
 
     return { success: true };
   } catch (error) {
+    if ((error as { status?: number }).status === 404) {
+      console.warn(
+        `[clerk-sync] Clerk user not found, metadata was not synced: ${clerkId}`,
+      );
+      return { success: false, error: "Clerk user not found" };
+    }
     console.error(`[clerk-sync] Failed to sync metadata to Clerk for ${clerkId}:`, error);
     reportError(error, {
       tags: { integration: "clerk", operation: "sync-user-metadata" },

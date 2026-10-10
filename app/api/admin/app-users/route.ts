@@ -48,6 +48,13 @@ function normalizeText(value?: string | null) {
   return value?.trim().toLowerCase() ?? "";
 }
 
+function phoneSearchRegex(value: string) {
+  const digits = value.replace(/\D/g, "");
+  const localDigits = digits.length > 10 ? digits.slice(-10) : digits;
+  if (localDigits.length !== 10) return null;
+  return localDigits.split("").join("\\D*");
+}
+
 function toIsoString(value: unknown): string | null {
   if (!value) return null;
   const date =
@@ -159,6 +166,15 @@ function buildAggregationPipeline(
       { "profile.phone": searchRegex },
       { "profile.whatsapp": searchRegex },
     ];
+
+    const normalizedPhoneRegex = phoneSearchRegex(search);
+    if (normalizedPhoneRegex) {
+      const phoneRegex = new RegExp(normalizedPhoneRegex);
+      orConditions.push(
+        { "profile.phone": phoneRegex },
+        { "profile.whatsapp": phoneRegex },
+      );
+    }
 
     if (clerkSearchIds.length > 0) {
       orConditions.push({ clerkId: { $in: clerkSearchIds } });

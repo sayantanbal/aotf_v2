@@ -201,6 +201,7 @@ export default function UsersPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actioningId, setActioningId] = useState<string | null>(null);
+  const [isReconciling, setIsReconciling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   useEffect(() => {
@@ -454,6 +455,41 @@ export default function UsersPage() {
     }
   };
 
+  const handleReconcilePayments = async () => {
+    setIsReconciling(true);
+    try {
+      const res = await fetch("/api/admin/app-users/reconcile-payments", {
+        method: "POST",
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        matched?: number;
+        missingClerkUsers?: number;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to reconcile payments");
+      }
+
+      addToast({
+        description: `${data.matched ?? 0} pending payment${data.matched === 1 ? "" : "s"} reconciled${data.missingClerkUsers ? `; ${data.missingClerkUsers} stale Clerk profile${data.missingClerkUsers === 1 ? "" : "s"} skipped` : ""}`,
+        color: "success",
+      });
+      await loadBundle(false, true);
+    } catch (err) {
+      reportClientError(err, {
+        feature: "admin-users",
+        extra: { action: "reconcile-payments" },
+      });
+      addToast({
+        description:
+          err instanceof Error ? err.message : "Failed to reconcile payments",
+        color: "danger",
+      });
+    } finally {
+      setIsReconciling(false);
+    }
+  };
+
   const tabSummary =
     selectedTab === "teacher"
       ? {
@@ -515,6 +551,20 @@ export default function UsersPage() {
           <SelectItem key="active">Active</SelectItem>
           <SelectItem key="deleted">Deleted</SelectItem>
         </Select>
+        {canRecoverPayments ? (
+          <Button
+            size="sm"
+            variant="flat"
+            color="primary"
+            startContent={
+              isReconciling ? <Spinner size="sm" /> : <CreditCard size={16} />
+            }
+            isDisabled={isReconciling}
+            onPress={() => void handleReconcilePayments()}
+          >
+            Reconcile payments
+          </Button>
+        ) : null}
         <Button
           isIconOnly
           size="lg"
